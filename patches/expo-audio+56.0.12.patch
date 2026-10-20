@@ -1,0 +1,36 @@
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioModule.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioModule.kt
+index 992239b..69afafc 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioModule.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioModule.kt
+@@ -916,8 +916,12 @@ class AudioModule : Module() {
+ 
+   @Suppress("DEPRECATION")
+   private fun updatePlaySoundThroughEarpiece(playThroughEarpiece: Boolean) {
+-    audioManager.mode = if (playThroughEarpiece) AudioManager.MODE_IN_COMMUNICATION else AudioManager.MODE_NORMAL
+-    audioManager.setSpeakerphoneOn(!playThroughEarpiece)
++    if (audioManager.mode == AudioManager.MODE_IN_COMMUNICATION) {
++      audioManager.setSpeakerphoneOn(!playThroughEarpiece)
++    } else {
++      audioManager.mode = if (playThroughEarpiece) AudioManager.MODE_IN_COMMUNICATION else AudioManager.MODE_NORMAL
++      audioManager.setSpeakerphoneOn(!playThroughEarpiece)
++    }
+   }
+ 
+   private fun retrieveStreamType(uri: Uri): Int = Util.inferContentType(uri)
+diff --git a/node_modules/expo-audio/ios/AudioModule.swift b/node_modules/expo-audio/ios/AudioModule.swift
+index 12d7de0..137988c 100644
+--- a/node_modules/expo-audio/ios/AudioModule.swift
++++ b/node_modules/expo-audio/ios/AudioModule.swift
+@@ -818,6 +818,12 @@ public class AudioModule: Module {
+     } else {
+       try session.setCategory(category, options: sessionOptions)
+     }
++
++    #if os(iOS)
++    if category == .playAndRecord {
++      try session.overrideOutputAudioPort(mode.shouldRouteThroughEarpiece ? .none : .speaker)
++    }
++    #endif
+   }
+ 
+   private func activateSession() throws {

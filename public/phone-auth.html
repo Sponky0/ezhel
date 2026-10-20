@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Random Chat - Giriş Yap</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Firebase SDKs (Compat/CDN versions for zero-configuration) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+  <style>
+    :root {
+      --background: #0A0E1A;
+      --bg-element: #121829;
+      --bg-selected: #1E293B;
+      --text: #FFFFFF;
+      --text-secondary: #9CA3AF;
+      --primary: #8B5CF6;
+      --border: #1E293B;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background-color: var(--background);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background-color: var(--bg-element);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 8px;
+    }
+
+    .country-code {
+      width: 80px;
+      background-color: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 12px;
+      font-size: 16px;
+      text-align: center;
+    }
+
+    input[type="tel"], input[type="text"] {
+      flex: 1;
+      background-color: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 12px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--primary);
+    }
+
+    button {
+      width: 100%;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 16px;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    #recaptcha-container {
+      margin: 16px 0;
+      display: flex;
+      justify-content: center;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .error-msg {
+      color: #EF4444;
+      font-size: 13px;
+      text-align: center;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .loader {
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid var(--primary);
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Telefon ile Giriş</h2>
+    <p class="desc" id="flow-desc">Hesabını doğrulamak ve güvenli giriş yapmak için telefon numaranı gir.</p>
+
+    <!-- STEP 1: Phone Input -->
+    <div id="step-phone">
+      <div class="form-group">
+        <label for="phone-input">Telefon Numarası</label>
+        <div class="input-wrapper">
+          <input type="text" id="country-code" class="country-code" value="+90" placeholder="+90">
+          <input type="tel" id="phone-input" placeholder="5551234567" autofocus>
+        </div>
+      </div>
+
+      <!-- Firebase reCAPTCHA Container -->
+      <div id="recaptcha-container"></div>
+
+      <button id="send-code-btn">
+        <span id="btn-text-phone">Doğrulama Kodu Gönder</span>
+        <div id="btn-loader-phone" class="loader hidden"></div>
+      </button>
+    </div>
+
+    <!-- STEP 2: OTP Code Input -->
+    <div id="step-otp" class="hidden">
+      <div class="form-group">
+        <label for="otp-input">Gelen 6 Haneli Kod</label>
+        <input type="text" id="otp-input" placeholder="123456" maxlength="6" pattern="[0-9]*" inputmode="numeric">
+      </div>
+
+      <button id="verify-code-btn">
+        <span id="btn-text-otp">Kodu Doğrula & Giriş Yap</span>
+        <div id="btn-loader-otp" class="loader hidden"></div>
+      </button>
+
+      <div style="text-align: center;">
+        <button type="button" class="back-btn" id="change-number-btn">Numarayı Değiştir</button>
+      </div>
+    </div>
+
+    <div class="error-msg" id="error-box">Bir hata oluştu. Lütfen tekrar deneyin.</div>
+  </div>
+
+  <script>
+    // Config values automatically injected from Firebase WEB app
+    const firebaseConfig = {
+      projectId: "randomchatapp-754d7",
+      appId: "1:560093798858:web:c0e855c67bb00be274af33",
+      storageBucket: "randomchatapp-754d7.firebasestorage.app",
+      apiKey: "AIzaSyBAbmLu5wS8dBreDE-h4zyqreyxtyVSo4I",
+      authDomain: "randomchatapp-754d7.firebaseapp.com",
+      messagingSenderId: "560093798858",
+      projectNumber: "560093798858"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+
+    const auth = firebase.auth();
+    auth.languageCode = 'tr'; // SMS language
+
+    // DOM References
+    const stepPhoneDiv = document.getElementById('step-phone');
+    const stepOtpDiv = document.getElementById('step-otp');
+    const flowDesc = document.getElementById('flow-desc');
+    
+    const countryCodeInput = document.getElementById('country-code');
+    const phoneInput = document.getElementById('phone-input');
+    const otpInput = document.getElementById('otp-input');
+    
+    const sendCodeBtn = document.getElementById('send-code-btn');
+    const verifyCodeBtn = document.getElementById('verify-code-btn');
+    const changeNumberBtn = document.getElementById('change-number-btn');
+    
+    const btnTextPhone = document.getElementById('btn-text-phone');
+    const btnLoaderPhone = document.getElementById('btn-loader-phone');
+    const btnTextOtp = document.getElementById('btn-text-otp');
+    const btnLoaderOtp = document.getElementById('btn-loader-otp');
+    
+    const errorBox = document.getElementById('error-box');
+
+    let confirmationResult = null;
+
+    // Show error helper
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = 'block';
+    }
+
+    function clearError() {
+      errorBox.style.display = 'none';
+    }
+
+    // Initialize reCAPTCHA Verifier
+    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      'size': 'normal', // 'normal' or 'invisible'
+      'callback': (response) => {
+        // reCAPTCHA solved, enable send button
+        sendCodeBtn.disabled = false;
+      },
+      'expired-callback': () => {
+        sendCodeBtn.disabled = true;
+        showError("reCAPTCHA süresi doldu. Lütfen tekrar çözün.");
+      }
+    });
+    
+    // Render recaptcha initial state
+    window.recaptchaVerifier.render().then((widgetId) => {
+      window.recaptchaWidgetId = widgetId;
+    });
+
+    // Send Verification SMS
+    sendCodeBtn.addEventListener('click', async () => {
+      clearError();
+      const code = countryCodeInput.value.trim();
+      const num = phoneInput.value.trim();
+
+      if (!num) {
+        showError("Lütfen geçerli bir telefon numarası girin.");
+        return;
+      }
+
+      const fullPhoneNumber = code + num;
+      
+      // Show Loader
+      sendCodeBtn.disabled = true;
+      btnTextPhone.classList.add('hidden');
+      btnLoaderPhone.classList.remove('hidden');
+
+      try {
+        const appVerifier = window.recaptchaVerifier;
+        confirmationResult = await auth.signInWithPhoneNumber(fullPhoneNumber, appVerifier);
+        
+        // Success: Transition to OTP step
+        stepPhoneDiv.classList.add('hidden');
+        stepOtpDiv.classList.remove('hidden');
+        flowDesc.textContent = `${fullPhoneNumber} numarasına gönderilen 6 haneli doğrulama kodunu gir.`;
+      } catch (error) {
+        console.error("SMS Gönderme Hatası:", error);
+        showError(error.message || "SMS gönderilemedi. Lütfen numarayı ve reCAPTCHA'yı kontrol edin.");
+        // Reset recaptcha
+        grecaptcha.reset(window.recaptchaWidgetId);
+        sendCodeBtn.disabled = false;
+      } finally {
+        btnTextPhone.classList.remove('hidden');
+        btnLoaderPhone.classList.add('hidden');
+      }
+    });
+
+    // Verify SMS Code
+    verifyCodeBtn.addEventListener('click', async () => {
+      clearError();
+      const code = otpInput.value.trim();
+
+      if (code.length !== 6) {
+        showError("Lütfen 6 haneli kodu eksiksiz girin.");
+        return;
+      }
+
+      verifyCodeBtn.disabled = true;
+      btnTextOtp.classList.add('hidden');
+      btnLoaderOtp.classList.remove('hidden');
+
+      try {
+        const result = await confirmationResult.confirm(code);
+        const user = result.user;
+
+        // Success! Send token and UID back to React Native WebView
+        const payload = {
+          type: 'firebase-auth-success',
+          uid: user.uid,
+          phoneNumber: user.phoneNumber
+        };
+
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+        } else {
+          showError("Giriş Başarılı! (Web Tarayıcı Modu - WebView Dışı)");
+          console.log("Success Payload:", payload);
+        }
+      } catch (error) {
+        console.error("Kod Doğrulama Hatası:", error);
+        showError("Girdiğiniz kod hatalı veya süresi dolmuş. Lütfen tekrar deneyin.");
+        verifyCodeBtn.disabled = false;
+      } finally {
+        btnTextOtp.classList.remove('hidden');
+        btnLoaderOtp.classList.add('hidden');
+      }
+    });
+
+    // Back to Phone input step
+    changeNumberBtn.addEventListener('click', () => {
+      clearError();
+      stepOtpDiv.classList.add('hidden');
+      stepPhoneDiv.classList.remove('hidden');
+      flowDesc.textContent = "Hesabını doğrulamak ve güvenli giriş yapmak için telefon numaranı gir.";
+      otpInput.value = '';
+      grecaptcha.reset(window.recaptchaWidgetId);
+      sendCodeBtn.disabled = false;
+    });
+  </script>
+</body>
+</html>

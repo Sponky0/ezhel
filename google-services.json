@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "356371468933",
+    "project_id": "napan-app",
+    "storage_bucket": "napan-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:356371468933:android:8cb792546cce4dbd2d0fec",
+        "android_client_info": {
+          "package_name": "app.napan.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVgPtGBYD1ZkVpwVH3iZ-QNrQgLNlKF7U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:356371468933:android:aeb79491b87d450c2d0fec",
+        "android_client_info": {
+          "package_name": "com.randomchatapp.rancha"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVgPtGBYD1ZkVpwVH3iZ-QNrQgLNlKF7U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

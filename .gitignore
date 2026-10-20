@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+.jso/
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+credentials.json
+*service-account*.json
+.DS_Store
+__MACOSX/
