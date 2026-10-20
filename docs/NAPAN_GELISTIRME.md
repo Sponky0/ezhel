@@ -13,10 +13,10 @@ npx eas-cli@25.2.0 whoami
 npx eas-cli@25.2.0 project:info
 ```
 
-Expo owner: `ezekutlu`; proje ID: `552db9b6-f7a3-4636-a201-c155cbeecf5b`.
-Yerel slug `napan`; Expo projesinin daha önceki slug değeri `kimki` idi.
-`project:info` uyuşmazlık bildirirse önce bu eşleşmeyi çözün. Proje ID'sini
-silerek yeni proje oluşturmayın ve mevcut imzalama anahtarını değiştirmeyin.
+Expo owner: `ezekutlu`; proje ID: `d5beacfa-d122-4ebd-bea3-bce3b5f808de`.
+Expo projesi `@ezekutlu/napan` olarak oluşturulup bağlandı; slug `napan`.
+Yeni projede FCM V1 ve mevcut Android imzalama anahtarının bağlantısını doğrulayın.
+Eski `kimki` projesindeki imzalama anahtarını silmeyin veya değiştirmeyin.
 
 EAS preview, development ve production profillerinde yeni Supabase'in public
 istemci ayarları bulunmaktadır. Yerel web geliştirmesi için aynı public
@@ -31,7 +31,8 @@ npm run web
 Android paketi `app.napan.mobile`; lisans kontrolü aynı paketle eşleşir.
 Firebase projesi `napan-app`, google-services.json uygulama klasöründedir.
 Bu dosya public istemci yapılandırmasıdır; özel servis hesabı anahtarı değildir.
-Expo panelinde bu paket için FCM V1 anahtarı ve upload keystore mevcuttur.
+Eski Expo projesinde bu paket için FCM V1 anahtarı ve upload keystore mevcuttur;
+yeni napan projesindeki bağlantıları ayrıca doğrulayın.
 
 ## APK
 
