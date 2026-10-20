@@ -1,8 +1,9 @@
+import { createRemoteIceQueue, isPeerConnected } from '../../lib/callConnection';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter, useNavigation } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { setAudioModeAsync } from "expo-audio";
+import { startVoiceAudio, setVoiceSpeaker, stopVoiceAudio } from "../../lib/callAudio";
 import {
   ActivityIndicator,
   Animated,
@@ -277,18 +278,7 @@ export default function VoiceMatchScreen() {
       localStreamRef.current = null;
     }
 
-    // Reset audio mode
-    if (Platform.OS !== "web") {
-      try {
-        setAudioModeAsync({
-          allowsRecording: false,
-          shouldPlayInBackground: false,
-          shouldRouteThroughEarpiece: false,
-        });
-      } catch (e) {
-        console.warn("Failed to reset audio mode in cleanupCall:", e);
-      }
-    }
+    void stopVoiceAudio('random').catch(error => console.warn('Call audio cleanup failed:', error));
 
     setIsSpeakerOn(false);
 
@@ -321,37 +311,18 @@ export default function VoiceMatchScreen() {
   const toggleSpeaker = async () => {
     const nextSpeakerState = !isSpeakerOn;
     setIsSpeakerOn(nextSpeakerState);
-    if (Platform.OS !== "web") {
-      try {
-        await setAudioModeAsync({
-          shouldRouteThroughEarpiece: !nextSpeakerState,
-          allowsRecording: true,
-          playsInSilentMode: true,
-          shouldPlayInBackground: true,
-        });
-      } catch (err) {
-        console.error("Failed to set audio mode on speaker toggle:", err);
-      }
+    try {
+      await setVoiceSpeaker(nextSpeakerState);
+    } catch (error) {
+      setIsSpeakerOn(!nextSpeakerState);
+      console.warn('Speaker routing failed:', error);
     }
   };
 
   // Setup WebRTC and audio capturing
   const setupWebRTC = async () => {
     try {
-      if (Platform.OS !== "web") {
-        try {
-          await setAudioModeAsync({
-            shouldRouteThroughEarpiece: true, // Default to earpiece
-            allowsRecording: true,
-            playsInSilentMode: true,
-            shouldPlayInBackground: true,
-          });
-        } catch (e) {
-          console.warn("Failed to set audio mode in setupWebRTC:", e);
-        }
-        await mediaDevices.enumerateDevices();
-        // Permission check on mobile is done when calling getUserMedia
-      }
+      await startVoiceAudio('random');
 
       const stream = await mediaDevices.getUserMedia({
         audio: true,
@@ -427,6 +398,40 @@ export default function VoiceMatchScreen() {
     const pc = await setupWebRTC();
     const channel = supabase.channel(roomName);
     signalingChannelRef.current = channel;
+    const remoteIce = createRemoteIceQueue(async candidate => {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    });
+    let connected = false;
+    const connectionTimeout = setTimeout(() => {
+      if (pcRef.current !== pc || connected) return;
+      console.warn('WebRTC connection timed out before ICE connected');
+      console.warn("WebRTC disconnected before media was established");
+      cleanupCall();
+    }, 45000);
+    const observeConnection = () => {
+      if (pcRef.current !== pc) return;
+      if (isPeerConnected(pc.connectionState, pc.iceConnectionState)) {
+        if (connected) return;
+        connected = true;
+        clearTimeout(connectionTimeout);
+        setStatus("connected");
+        startCallTimer();
+      } else if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
+        clearTimeout(connectionTimeout);
+        console.warn("WebRTC disconnected before media was established");
+        cleanupCall();
+      }
+    };
+    pc.onconnectionstatechange = observeConnection;
+    pc.oniceconnectionstatechange = observeConnection;
+    const closeConnection = pc.close.bind(pc);
+    pc.close = () => {
+      clearTimeout(connectionTimeout);
+      remoteIce.close();
+      pc.onconnectionstatechange = null;
+      pc.oniceconnectionstatechange = null;
+      closeConnection();
+    };
 
     channel
       .on("broadcast", { event: "join" }, async () => {
@@ -444,6 +449,7 @@ export default function VoiceMatchScreen() {
       .on("broadcast", { event: "offer" }, async ({ payload }: any) => {
         if (!isCaller && pc) {
           await pc.setRemoteDescription(new RTCSessionDescription(payload));
+          await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
@@ -453,20 +459,19 @@ export default function VoiceMatchScreen() {
             payload: answer,
           });
 
-          setStatus("connected");
-          startCallTimer();
+
         }
       })
       .on("broadcast", { event: "answer" }, async ({ payload }: any) => {
         if (isCaller && pc) {
           await pc.setRemoteDescription(new RTCSessionDescription(payload));
-          setStatus("connected");
-          startCallTimer();
+          await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
+
         }
       })
       .on("broadcast", { event: "candidate" }, async ({ payload }: any) => {
         if (pc) {
-          await pc.addIceCandidate(new RTCIceCandidate(payload));
+          await remoteIce.add(payload).catch(error => console.warn('ICE candidate rejected:', error));
         }
       })
       .on("broadcast", { event: "like" }, () => {
@@ -486,17 +491,7 @@ export default function VoiceMatchScreen() {
 
     await channel.subscribe(async (status: any) => {
       if (status === "SUBSCRIBED") {
-        if (isCaller) {
-          // Send WebRTC Offer
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-
-          channel.send({
-            type: "broadcast",
-            event: "offer",
-            payload: offer,
-          });
-        } else {
+        if (!isCaller) {
           // Non-caller sends join event when subscribed
           channel.send({
             type: "broadcast",

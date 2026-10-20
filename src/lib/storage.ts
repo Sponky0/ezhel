@@ -43,10 +43,19 @@ function getContentType(nameOrPath: string): string {
  * @returns The public URL of the uploaded file
  */
 export async function uploadFile(bucket: string, path: string, uri: string): Promise<string> {
-  // Read file as Base64 using expo-file-system
-  const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error("Dosya yüklemek için tekrar giriş yapın.");
+  }
+  // Distinguish local file errors from Storage authorization failures.
+  let base64: string;
+  try {
+    base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  } catch {
+    throw new Error("Seçilen dosya okunamadı. Galeriden yeniden seçin.");
+  }
 
   // Convert Base64 to ArrayBuffer
   const arrayBuffer = decode(base64);
@@ -59,11 +68,11 @@ export async function uploadFile(bucket: string, path: string, uri: string): Pro
   // Upload to Supabase Storage
   const { error } = await supabase.storage.from(bucket).upload(path, arrayBuffer, {
     contentType,
-    upsert: true,
+    upsert: false,
   });
 
   if (error) {
-    throw error;
+    throw new Error(`Dosya yüklenemedi (${error.statusCode || 'Storage'}): ${error.message}`);
   }
 
   // Get public URL

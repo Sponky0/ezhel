@@ -694,7 +694,7 @@ export default function StoriesScreen() {
       console.error("Share story error:", err);
       ActionModal.show({
         title: "Hata",
-        message: "Güncelleme paylaşılırken bir hata oluştu.",
+        message: err instanceof Error ? err.message : (err as { message?: string })?.message || "Güncelleme paylaşılırken bir hata oluştu.",
         type: "error",
       });
     } finally {

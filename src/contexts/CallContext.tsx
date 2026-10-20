@@ -1,8 +1,9 @@
+import { createRemoteIceQueue, isPeerConnected } from '../lib/callConnection';
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, PermissionsAndroid } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
-import { setAudioModeAsync } from 'expo-audio';
+import { startVoiceAudio, setVoiceSpeaker, stopVoiceAudio } from '../lib/callAudio';
 import { findOrCreateConversation } from '../lib/conversations';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -16,16 +17,6 @@ let RTCPeerConnection: any;
 let RTCSessionDescription: any;
 let RTCIceCandidate: any;
 let mediaDevices: any;
-let InCallManager: any;
-
-if (Platform.OS !== 'web') {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    InCallManager = require('react-native-incall-manager').default;
-  } catch (err) {
-    console.warn('InCallManager could not be imported:', err);
-  }
-}
 
 if (Platform.OS !== 'web') {
   try {
@@ -60,32 +51,6 @@ if (Platform.OS !== 'web') {
   }
 }
 
-const requestBluetoothPermission = async () => {
-  if (Platform.OS === 'android' && Platform.Version >= 31) {
-    try {
-      const isGranted = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT
-      );
-      if (isGranted) return true;
-
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-        {
-          title: 'Bluetooth İzni',
-          message: 'Sesin kablosuz kulaklığa yönlendirilmesi için Bluetooth izni gerekiyor.',
-          buttonNeutral: 'Daha Sonra Sor',
-          buttonNegative: 'İptal',
-          buttonPositive: 'Tamam',
-        }
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.warn('Bluetooth permission check/request error:', err);
-      return false;
-    }
-  }
-  return true;
-};
 
 interface IncomingCall {
   callerId: string;
@@ -249,28 +214,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const setupWebRTC = async () => {
     try {
-      if (Platform.OS !== "web") {
-        // Request Bluetooth Connect permission for Android 12+
-        await requestBluetoothPermission();
-
-        try {
-          if (InCallManager) {
-            InCallManager.start({ media: 'audio', auto: true });
-            InCallManager.setKeepScreenOn(true);
-            InCallManager.setSpeakerphoneOn(false);
-          } else {
-            await setAudioModeAsync({
-              shouldRouteThroughEarpiece: true, // Default to earpiece
-              allowsRecording: true,
-              playsInSilentMode: true,
-              shouldPlayInBackground: true,
-            });
-          }
-        } catch (e) {
-          console.warn("Failed to set audio mode in setupWebRTC:", e);
-        }
-        await mediaDevices.enumerateDevices();
-      }
+      await startVoiceAudio('direct');
 
       const stream = await mediaDevices.getUserMedia({
         audio: true,
@@ -348,10 +292,46 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const pc = await setupWebRTC();
       const channel = supabase.channel(generatedRoomName);
       signalingChannelRef.current = channel;
+      const remoteIce = createRemoteIceQueue(async candidate => {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      });
+      let connected = false;
+      const connectionTimeout = setTimeout(() => {
+        if (pcRef.current !== pc || connected) return;
+        console.warn('WebRTC connection timed out before ICE connected');
+        setCallStatus("disconnected");
+        cleanupCall();
+      }, 45000);
+      const observeConnection = () => {
+        if (pcRef.current !== pc) return;
+        if (isPeerConnected(pc.connectionState, pc.iceConnectionState)) {
+          if (connected) return;
+          connected = true;
+          clearTimeout(connectionTimeout);
+          if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+          setCallStatus("connected");
+          startCallTimer();
+        } else if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
+          clearTimeout(connectionTimeout);
+          setCallStatus("disconnected");
+          cleanupCall();
+        }
+      };
+      pc.onconnectionstatechange = observeConnection;
+      pc.oniceconnectionstatechange = observeConnection;
+      const closeConnection = pc.close.bind(pc);
+      pc.close = () => {
+        clearTimeout(connectionTimeout);
+        remoteIce.close();
+        pc.onconnectionstatechange = null;
+        pc.oniceconnectionstatechange = null;
+        closeConnection();
+      };
 
       channel
         .on("broadcast", { event: "join" }, async () => {
           if (callerMode && pc) {
+            if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
             setCallStatus("connecting");
             // Caller initiates offer
             const offer = await pc.createOffer();
@@ -367,6 +347,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           if (!callerMode && pc) {
             setCallStatus("connecting");
             await pc.setRemoteDescription(new RTCSessionDescription(payload));
+            await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
 
@@ -375,21 +356,18 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
               event: "answer",
               payload: answer,
             });
-
-            setCallStatus("connected");
-            startCallTimer();
           }
         })
         .on("broadcast", { event: "answer" }, async ({ payload }: any) => {
           if (callerMode && pc) {
             await pc.setRemoteDescription(new RTCSessionDescription(payload));
-            setCallStatus("connected");
-            startCallTimer();
+            await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
+
           }
         })
         .on("broadcast", { event: "candidate" }, async ({ payload }: any) => {
           if (pc) {
-            await pc.addIceCandidate(new RTCIceCandidate(payload));
+            await remoteIce.add(payload).catch(error => console.warn('ICE candidate rejected:', error));
           }
         })
         .on("broadcast", { event: "call_rejected" }, ({ payload }: any) => {
@@ -467,23 +445,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setHasLiked(false);
     setPeerLiked(false);
 
-    // Reset audio mode
-    if (Platform.OS !== "web") {
-      try {
-        if (InCallManager) {
-          InCallManager.setKeepScreenOn(false);
-          InCallManager.stop();
-        } else {
-          setAudioModeAsync({
-            allowsRecording: false,
-            shouldPlayInBackground: false,
-            shouldRouteThroughEarpiece: false,
-          });
-        }
-      } catch (e) {
-        console.warn("Failed to reset audio mode in cleanupCall:", e);
-      }
-    }
+    void stopVoiceAudio('direct').catch(error => console.warn('Call audio cleanup failed:', error));
 
     // Stop local stream tracks
     if (localStreamRef.current) {
@@ -553,21 +515,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const nextSpeakerState = !isSpeakerOn;
     setIsSpeakerOn(nextSpeakerState);
     console.log("CallContext: Speaker toggled:", nextSpeakerState);
-    if (Platform.OS !== "web") {
-      try {
-        if (InCallManager) {
-          InCallManager.setSpeakerphoneOn(nextSpeakerState);
-        } else {
-          await setAudioModeAsync({
-            shouldRouteThroughEarpiece: !nextSpeakerState,
-            allowsRecording: true,
-            playsInSilentMode: true,
-            shouldPlayInBackground: true,
-          });
-        }
-      } catch (err) {
-        console.error("Failed to set audio mode on speaker toggle:", err);
-      }
+    try {
+      await setVoiceSpeaker(nextSpeakerState);
+    } catch (error) {
+      setIsSpeakerOn(!nextSpeakerState);
+      console.warn('Speaker routing failed:', error);
     }
   };
 

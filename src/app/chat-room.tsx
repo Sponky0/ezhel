@@ -1,3 +1,4 @@
+import { mergeMessages } from '../lib/messageHistory';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -24,6 +25,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useUnreadMessages } from "../contexts/UnreadMessagesContext";
 import { uploadFile } from "../lib/storage";
+import { getAssetExtension } from "../lib/media";
 import { supabase } from "../lib/supabase";
 
 interface Message {
@@ -159,7 +161,8 @@ export default function ChatRoomScreen() {
 
       if (error) throw error;
       // Eskiden yeniye doğru göstermek için ters çevir.
-      setMessages((data || []).slice().reverse());
+      setMessages(prev => mergeMessages((data || []).slice().reverse(),
+        prev.filter(message => message.conversation_id === conversationId)));
       setLoading(false);
 
       // Scroll to bottom
@@ -197,7 +200,7 @@ export default function ChatRoomScreen() {
               setMessages((prev) => {
                 // Prevent duplicates
                 if (prev.some((m) => m.id === newMsg.id)) return prev;
-                return [...prev, newMsg];
+                return mergeMessages(prev, [newMsg]);
               });
               if (newMsg.sender_id !== user?.id) {
                 markConversationRead(conversationId);
@@ -230,7 +233,13 @@ export default function ChatRoomScreen() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Recover events missed before subscription or while reconnecting.
+        if (status === "SUBSCRIBED") void fetchMessages();
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("Message subscription unavailable:", status);
+        }
+      });
 
     return () => {
       clearTimeout(timer);
@@ -255,13 +264,14 @@ export default function ChatRoomScreen() {
     setSending(true);
 
     try {
-      const { error } = await supabase.from("messages").insert({
+      const { data: sentMessage, error } = await supabase.from("messages").insert({
         conversation_id: conversationId,
         sender_id: user.id,
         content: textToSend,
-      });
+      }).select("id, conversation_id, sender_id, content, media_url, created_at, deleted_at").single();
 
       if (error) throw error;
+      if (sentMessage) setMessages(prev => mergeMessages(prev, [sentMessage as Message]));
     } catch (err) {
       console.error("Send message error:", err);
       ActionModal.show({
@@ -307,26 +317,27 @@ export default function ChatRoomScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setSending(true);
         const imageUri = result.assets[0].uri;
-        const fileExt = imageUri.split(".").pop() || "jpg";
+        const fileExt = getAssetExtension(result.assets[0]);
         const fileName = `chat_${conversationId}_${Date.now()}.${fileExt}`;
 
         // Upload
         const publicUrl = await uploadFile("chat_media", fileName, imageUri);
 
         // Save message record
-        const { error } = await supabase.from("messages").insert({
+        const { data: sentMessage, error } = await supabase.from("messages").insert({
           conversation_id: conversationId,
           sender_id: user.id,
           media_url: publicUrl,
-        });
+        }).select("id, conversation_id, sender_id, content, media_url, created_at, deleted_at").single();
 
         if (error) throw error;
+        if (sentMessage) setMessages(prev => mergeMessages(prev, [sentMessage as Message]));
       }
     } catch (err) {
       console.error("Send photo error:", err);
       ActionModal.show({
         title: "Hata",
-        message: "Fotoğraf gönderilemedi.",
+        message: err instanceof Error ? err.message : (err as { message?: string })?.message || "Fotoğraf gönderilemedi.",
         type: "error",
       });
     } finally {
