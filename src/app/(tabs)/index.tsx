@@ -738,7 +738,7 @@ export default function HomeScreen() {
                 if (!user) {
                   showLoginModal();
                 } else {
-                  router.push("/profile");
+                  router.push({ pathname: "/(tabs)/profile", params: { boost: String(Date.now()) } });
                 }
               }}
             >

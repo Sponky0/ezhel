@@ -1,3 +1,4 @@
+import ForegroundBanner from '../components/ForegroundBanner';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider, Stack, usePathname, useRouter } from 'expo-router';
 import { ActivityIndicator, View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { useFonts } from 'expo-font';
@@ -26,12 +27,13 @@ SplashScreen.preventAutoHideAsync();
 
 function AppContent() {
   const { checking: licenseChecking, retrying: licenseRetrying, isValid: isLicenseValid, errorType: licenseErrorType, recheck: recheckLicense } = useLicenseCheck();
-  const { 
-    user, 
-    loading, 
-    profile, 
-    maintenanceMode, 
-    isLoginModalVisible, 
+  const {
+    user,
+    loading,
+    authError, retryAuth,
+    profile,
+    maintenanceMode,
+    isLoginModalVisible,
     hideLoginModal,
     showCongratsModal,
     setShowCongratsModal
@@ -72,6 +74,8 @@ function AppContent() {
     );
   }
 
+  if (authError) return <View style={styles.loadingContainer}><Text style={{ color: '#fff', padding: 20 }}>{authError}</Text><TouchableOpacity onPress={retryAuth}><Text style={{ color: '#aa99ff' }}>Tekrar dene</Text></TouchableOpacity></View>;
+
   // Maintenance mode redirect (Non-admins only)
   if (maintenanceMode && profile?.role !== 'admin') {
     return (
@@ -109,6 +113,7 @@ function AppContent() {
   return (
     <>
       <AnimatedSplashOverlay />
+      <ForegroundBanner />
       {showActiveCallBanner && (
         <TouchableOpacity
           style={[styles.activeCallBanner, { top: insets.top > 0 ? insets.top + 8 : 16 }]}
@@ -130,33 +135,33 @@ function AppContent() {
       )}
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen 
-          name="chat-room" 
-          options={{ 
+        <Stack.Screen
+          name="chat-room"
+          options={{
             headerShown: false,
             animation: 'slide_from_right'
-          }} 
+          }}
         />
-        <Stack.Screen 
-          name="user-profile" 
-          options={{ 
+        <Stack.Screen
+          name="user-profile"
+          options={{
             headerShown: false,
             animation: 'slide_from_right'
-          }} 
+          }}
         />
-        <Stack.Screen 
-          name="admin" 
-          options={{ 
+        <Stack.Screen
+          name="admin"
+          options={{
             headerShown: false,
             animation: 'slide_from_bottom'
-          }} 
+          }}
         />
-        <Stack.Screen 
-          name="voice-call" 
-          options={{ 
+        <Stack.Screen
+          name="voice-call"
+          options={{
             headerShown: false,
             animation: 'fade'
-          }} 
+          }}
         />
       </Stack>
 
@@ -201,7 +206,7 @@ function CongratsModalContent({ onClose }: { onClose: () => void }) {
         <Text style={[styles.congratsDescription, { color: colors.textSecondary }]}>
           Profiliniz oluşturuldu. Şimdi yeni insanlarla tanışmaya ve anonim olarak sohbet etmeye başlayabilirsiniz.
         </Text>
-        
+
         <TouchableOpacity
           style={[styles.congratsButton, { backgroundColor: colors.primary }]}
           onPress={onClose}
@@ -230,7 +235,7 @@ function AppContentWithNavigationTheme() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Poppins_600SemiBold,
     Poppins_800ExtraBold,
     Inter_400Regular,
@@ -238,12 +243,12 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontError) {
     return null;
   }
 

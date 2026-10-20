@@ -1,3 +1,4 @@
+import { SocialPanel } from '../components/SocialPanel';
 import { ActionModal } from "@/components/ActionModal";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
@@ -135,6 +136,7 @@ function getFlagEmoji(country: string | null | undefined): string {
 }
 
 interface UserProfileData {
+  email_verified_at?: string | null;
   id: string;
   username: string;
   avatar_url: string | null;
@@ -536,12 +538,13 @@ export default function UserProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: 110 + (insets.bottom > 0 ? insets.bottom + 8 : 12) },
         ]}
       >
+        <SocialPanel userId={userId} />
         {/* Cover Photo */}
         <View style={styles.coverContainer}>
           <Image
@@ -577,7 +580,7 @@ export default function UserProfileScreen() {
         {/* User Details Details */}
         <View style={styles.detailsContainer}>
           <Text style={[styles.nameText, { color: colors.text }]}>
-            {profileData.username}, {displayAge}
+            {profileData.username}{profileData.email_verified_at ? " ✓" : ""}, {displayAge}
           </Text>
 
           {/* Location & Language info */}

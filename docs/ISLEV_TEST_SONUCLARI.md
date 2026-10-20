@@ -1,3 +1,5 @@
+> Sonraki kapsamlı değişiklik ve 0030–0033 geçiş paketi için [kullanıcı raporu uygulama kaydını](KULLANICI_RAPORU_UYGULAMA.md) okuyun. Aşağıdaki kayıt önceki APK araştırmasına aittir.
+
 # APK işlev sorunları: kontrol ve düzeltmeler
 
 Kullanıcı iki ayrı cihazda aramanın bazen bağlantıda takıldığını, bağlı görünse de iki yönde ses olmadığını, fotoğraf/hikâye yüklenmediğini ve mesajların geç geldiğini bildirdi.

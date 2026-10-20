@@ -1,3 +1,4 @@
+import { requestId } from '../../lib/requestId';
 import { createRemoteIceQueue, isPeerConnected } from '../../lib/callConnection';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -395,6 +396,7 @@ export default function VoiceMatchScreen() {
     const sortedIds = [myId, peerId].sort();
     const roomName = `signaling:${sortedIds[0]}_${sortedIds[1]}`;
 
+    let matchId = isCaller ? requestId() : null;
     const pc = await setupWebRTC();
     const channel = supabase.channel(roomName);
     signalingChannelRef.current = channel;
@@ -416,6 +418,9 @@ export default function VoiceMatchScreen() {
         clearTimeout(connectionTimeout);
         setStatus("connected");
         startCallTimer();
+        if (matchId) void supabase.rpc('confirm_match', { p_peer_id: peerId, p_match_id: matchId }).then(({ error }) => {
+          if (error) console.warn('Match confirmation failed:', error.message);
+        });
       } else if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
         clearTimeout(connectionTimeout);
         console.warn("WebRTC disconnected before media was established");
@@ -442,12 +447,13 @@ export default function VoiceMatchScreen() {
           channel.send({
             type: "broadcast",
             event: "offer",
-            payload: offer,
+            payload: { ...offer, matchId },
           });
         }
       })
       .on("broadcast", { event: "offer" }, async ({ payload }: any) => {
         if (!isCaller && pc) {
+          matchId = payload.matchId || null;
           await pc.setRemoteDescription(new RTCSessionDescription(payload));
           await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
           const answer = await pc.createAnswer();

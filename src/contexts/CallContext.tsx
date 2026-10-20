@@ -1,14 +1,13 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createRemoteIceQueue, isPeerConnected } from '../lib/callConnection';
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { startVoiceAudio, setVoiceSpeaker, stopVoiceAudio } from '../lib/callAudio';
 import { findOrCreateConversation } from '../lib/conversations';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Colors, Fonts, Spacing } from '../constants/theme';
+import { Colors } from '../constants/theme';
 import { useColorScheme } from '../hooks/use-color-scheme';
 import { getIceServers } from '../lib/turn';
 
@@ -85,10 +84,11 @@ const CallContext = createContext<CallContextType | undefined>(undefined);
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
-  
+
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState<
@@ -553,7 +553,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const acceptCall = () => {
     if (!incomingCall) return;
-    const call = incomingCall;
+    if (!incomingCallRef.current) return;
+    const call = incomingCallRef.current;
+    incomingCallRef.current = null;
     setIncomingCall(null);
     setActiveCallId(call.callerId);
     setPeerName(call.callerName);
@@ -573,9 +575,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const rejectCall = () => {
     if (!incomingCall) return;
-    const call = incomingCall;
+    if (!incomingCallRef.current) return;
+    const call = incomingCallRef.current;
+    incomingCallRef.current = null;
     setIncomingCall(null);
-    
+
     // Send rejection signal
     const sigChannel = supabase.channel(call.roomName);
     sigChannel.subscribe((status) => {
@@ -593,8 +597,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   };
 
   const startCall = (targetUserId: string, targetUsername: string, targetAvatar: string | null) => {
-    if (!user) return;
-    
+    if (!user || activeCallIdRef.current) return;
+    activeCallIdRef.current = targetUserId;
+
     // Set call info
     setActiveCallId(targetUserId);
     setPeerName(targetUsername);
@@ -613,73 +618,37 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <CallContext.Provider value={{ 
-      activeCallId, 
-      callStatus, 
-      timeLeft, 
-      isMuted, 
-      isSpeakerOn, 
-      peerName, 
-      peerAvatar, 
-      isCaller, 
-      roomName, 
+    <CallContext.Provider value={{
+      activeCallId,
+      callStatus,
+      timeLeft,
+      isMuted,
+      isSpeakerOn,
+      peerName,
+      peerAvatar,
+      isCaller,
+      roomName,
       hasLiked,
       peerLiked,
-      startCall, 
-      acceptCall, 
-      rejectCall, 
-      endCall, 
-      toggleMute, 
+      startCall,
+      acceptCall,
+      rejectCall,
+      endCall,
+      toggleMute,
       toggleSpeaker,
       sendLikeMessage,
       setIncomingCall
     }}>
       {children}
-      
-      {/* INCOMING CALL OVERLAY */}
+
       {incomingCall && (
-        <Modal
-          visible={true}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={rejectCall}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: colors.backgroundElement, borderColor: colors.border, borderWidth: 1 }]}>
-              <View style={styles.callerContainer}>
-                <Image
-                  source={incomingCall.callerAvatar ? { uri: incomingCall.callerAvatar } : require('../../assets/images/place-holder.png')}
-                  style={styles.avatar}
-                  contentFit="cover"
-                />
-                <Text style={[styles.callerName, { color: colors.text }]}>
-                  {incomingCall.callerName}
-                </Text>
-                <Text style={[styles.callType, { color: colors.textSecondary }]}>
-                  Gelen Sesli Arama...
-                </Text>
-              </View>
-
-              <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnReject]}
-                  onPress={rejectCall}
-                >
-                  <Ionicons name="close-sharp" size={24} color="#FFFFFF" />
-                  <Text style={styles.btnLabel}>Reddet</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnAccept]}
-                  onPress={acceptCall}
-                >
-                  <Ionicons name="call" size={20} color="#FFFFFF" />
-                  <Text style={styles.btnLabel}>Cevapla</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        <View style={{ position: 'absolute', top: insets.top + 8, left: 12, right: 12, borderRadius: 18, backgroundColor: colors.backgroundElement, padding: 16, elevation: 30, zIndex: 2000 }}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{incomingCall.callerName} · Gelen sesli arama</Text>
+          <View style={{ flexDirection: 'row', gap: 24, marginTop: 14 }}>
+            <TouchableOpacity onPress={rejectCall}><Text style={{ color: '#ff7777', padding: 8 }}>Reddet</Text></TouchableOpacity>
+            <TouchableOpacity onPress={acceptCall}><Text style={{ color: '#59e795', padding: 8 }}>Cevapla</Text></TouchableOpacity>
           </View>
-        </Modal>
+        </View>
       )}
     </CallContext.Provider>
   );
@@ -692,73 +661,3 @@ export function useCall() {
   }
   return context;
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(5, 7, 15, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.four,
-  },
-  modalContent: {
-    width: '90%',
-    maxWidth: 340,
-    borderRadius: 24,
-    padding: Spacing.five,
-    alignItems: 'center',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  callerContainer: {
-    alignItems: 'center',
-    marginBottom: Spacing.five,
-  },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    marginBottom: Spacing.three,
-  },
-  callerName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    fontFamily: Fonts.heading,
-    textAlign: 'center',
-    marginBottom: Spacing.one,
-  },
-  callType: {
-    fontSize: 14,
-    fontFamily: Fonts.body,
-    textAlign: 'center',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    gap: Spacing.four,
-  },
-  btn: {
-    flex: 1,
-    height: 54,
-    borderRadius: 27,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  btnReject: {
-    backgroundColor: '#EF4444',
-  },
-  btnAccept: {
-    backgroundColor: '#1EBEA5',
-  },
-  btnLabel: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-});

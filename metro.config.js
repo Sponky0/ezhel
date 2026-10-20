@@ -1,50 +1,6 @@
 const { getDefaultConfig } = require('expo/metro-config');
 
-const config = getDefaultConfig(__dirname);
-
-const isProduction = process.env.NODE_ENV === 'production' || 
-                     process.env.EAS_BUILD_PROFILE === 'production' || 
-                     process.env.EAS_BUILD_PROFILE === 'preview';
-
-// Expo SDK 56 eager native bundles use temporary output paths that this
-// obfuscator cannot discover. Keep preview APK builds free of this plugin.
-if (isProduction && process.env.EAS_BUILD_PROFILE !== 'preview') {
-  const jsoMetroPlugin = require('obfuscator-io-metro-plugin')({
-    compact: true,
-    controlFlowFlattening: false, // Performance & Hermes compatibility
-    deadCodeInjection: false,
-    debugProtection: false,
-    disableConsoleOutput: false,
-    identifierNamesGenerator: 'hexadecimal',
-    log: false,
-    numbersToExpressions: false,
-    renameGlobals: false,
-    selfDefending: false,
-    simplify: true,
-    splitStrings: false,
-    stringArray: true,
-    stringArrayEncoding: ['base64'],
-    stringArrayThreshold: 0.75,
-    unicodeEscapeSequence: false
-  }, {
-    runInDev: false,
-    logObfuscatedFiles: true,
-    sourceMap: false
-  });
-
-  // Safely merge obfuscator plugin into Expo Metro config
-  if (jsoMetroPlugin.transformer) {
-    config.transformer = {
-      ...config.transformer,
-      ...jsoMetroPlugin.transformer
-    };
-  }
-  if (jsoMetroPlugin.serializer) {
-    config.serializer = {
-      ...config.serializer,
-      ...jsoMetroPlugin.serializer
-    };
-  }
-}
-
-module.exports = config;
+// Expo SDK 56 uses temporary eager bundle paths. The former obfuscator plugin
+// cannot discover these and crashes after Metro succeeds, including production.
+// Keep Expo's supported Hermes/Metro pipeline for every build profile.
+module.exports = getDefaultConfig(__dirname);

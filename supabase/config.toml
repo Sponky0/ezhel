@@ -1,0 +1,8 @@
+# This endpoint authenticates RevenueCat's configured Authorization header.
+[functions.billing-webhook]
+verify_jwt = false
+
+# Validates the actual Supabase access token with auth.getUser before service use.
+# Supports projects using publishable API keys rather than legacy JWT API keys.
+[functions.read-message-media]
+verify_jwt = false

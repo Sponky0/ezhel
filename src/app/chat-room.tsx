@@ -1,6 +1,9 @@
+import StoryReplyPreview from '../components/StoryReplyPreview';
+import MediaComposer from '../components/MediaComposer';
+import MessageMedia from '../components/MessageMedia';
+import { useTyping } from '../hooks/useTyping';
 import { mergeMessages } from '../lib/messageHistory';
 import Ionicons from "@expo/vector-icons/Ionicons";
-import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -24,8 +27,6 @@ import { Colors, Fonts, Spacing } from "../constants/theme";
 import { useAuth } from "../contexts/AuthContext";
 import { useCall } from "../contexts/CallContext";
 import { useUnreadMessages } from "../contexts/UnreadMessagesContext";
-import { uploadFile } from "../lib/storage";
-import { getAssetExtension } from "../lib/media";
 import { supabase } from "../lib/supabase";
 
 interface Message {
@@ -34,6 +35,8 @@ interface Message {
   sender_id: string;
   content: string | null;
   media_url: string | null;
+  private_media?: boolean; media_kind?: string; media_mode?: string; media_source?: string;
+  media_opened_at?: string | null; story_id?: string; story_preview_url?: string;
   created_at: string;
   deleted_at: string | null;
 }
@@ -47,6 +50,8 @@ export default function ChatRoomScreen() {
   const searchParams = useLocalSearchParams();
   const conversationId = searchParams.id as string;
   const recipientName = searchParams.name as string;
+  const [composerVisible, setComposerVisible] = useState(false);
+  const { peerTyping, sendTyping } = useTyping(conversationId, user?.id);
 
   const scheme = useColorScheme();
   const colors = Colors[scheme === "dark" ? "dark" : "light"];
@@ -152,7 +157,7 @@ export default function ChatRoomScreen() {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "id, conversation_id, sender_id, content, media_url, created_at, deleted_at",
+          "id, conversation_id, sender_id, content, media_url, created_at, deleted_at, private_media, media_kind, media_mode, media_source, media_opened_at, story_id, story_preview_url",
         )
         .eq("conversation_id", conversationId)
         .is("deleted_at", null)
@@ -161,7 +166,7 @@ export default function ChatRoomScreen() {
 
       if (error) throw error;
       // Eskiden yeniye doğru göstermek için ters çevir.
-      setMessages(prev => mergeMessages((data || []).slice().reverse(),
+      setMessages(prev => mergeMessages<Message>(((data || []) as Message[]).slice().reverse(),
         prev.filter(message => message.conversation_id === conversationId)));
       setLoading(false);
 
@@ -259,6 +264,7 @@ export default function ChatRoomScreen() {
       return;
     }
 
+    sendTyping(false);
     const textToSend = inputText.trim();
     setInputText("");
     setSending(true);
@@ -268,7 +274,7 @@ export default function ChatRoomScreen() {
         conversation_id: conversationId,
         sender_id: user.id,
         content: textToSend,
-      }).select("id, conversation_id, sender_id, content, media_url, created_at, deleted_at").single();
+      }).select("id, conversation_id, sender_id, content, media_url, created_at, deleted_at, private_media, media_kind, media_mode, media_source, media_opened_at, story_id, story_preview_url").single();
 
       if (error) throw error;
       if (sentMessage) setMessages(prev => mergeMessages(prev, [sentMessage as Message]));
@@ -277,67 +283,6 @@ export default function ChatRoomScreen() {
       ActionModal.show({
         title: "Hata",
         message: "Mesaj gönderilemedi.",
-        type: "error",
-      });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  // Send Photo Message
-  const handleSendPhoto = async () => {
-    if (!user || !conversationId) return;
-    if (isBlocked) {
-      ActionModal.show({
-        title: "Engellendi",
-        message: "Bu kullanıcı ile aranızda bir engelleme bulunuyor.",
-        type: "warning",
-      });
-      return;
-    }
-
-    try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        ActionModal.show({
-          title: "İzin Gerekli",
-          message: "Galeriye erişmek için izin vermelisiniz.",
-          type: "warning",
-        });
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        quality: 0.7,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setSending(true);
-        const imageUri = result.assets[0].uri;
-        const fileExt = getAssetExtension(result.assets[0]);
-        const fileName = `chat_${conversationId}_${Date.now()}.${fileExt}`;
-
-        // Upload
-        const publicUrl = await uploadFile("chat_media", fileName, imageUri);
-
-        // Save message record
-        const { data: sentMessage, error } = await supabase.from("messages").insert({
-          conversation_id: conversationId,
-          sender_id: user.id,
-          media_url: publicUrl,
-        }).select("id, conversation_id, sender_id, content, media_url, created_at, deleted_at").single();
-
-        if (error) throw error;
-        if (sentMessage) setMessages(prev => mergeMessages(prev, [sentMessage as Message]));
-      }
-    } catch (err) {
-      console.error("Send photo error:", err);
-      ActionModal.show({
-        title: "Hata",
-        message: err instanceof Error ? err.message : (err as { message?: string })?.message || "Fotoğraf gönderilemedi.",
         type: "error",
       });
     } finally {
@@ -598,7 +543,8 @@ export default function ChatRoomScreen() {
                 { backgroundColor: scheme === "dark" ? "#242526" : "#E4E6EB" }
               ]}
             >
-              {item.media_url ? (
+              {item.story_preview_url && <StoryReplyPreview uri={item.story_preview_url} available={!!item.story_id} />}
+          {item.private_media ? <MessageMedia message={item} /> : item.media_url ? (
                 <TouchableOpacity activeOpacity={0.9} onPress={() => setSelectedImageUri(item.media_url)}>
                   <Image source={{ uri: item.media_url }} style={styles.msgImage} />
                 </TouchableOpacity>
@@ -642,7 +588,8 @@ export default function ChatRoomScreen() {
         style={styles.outgoingBubbleContainer}
       >
         <View style={[styles.msgBubble, styles.outgoingBubble, { backgroundColor: colors.primary }]}>
-          {item.media_url ? (
+          {item.story_preview_url && <StoryReplyPreview uri={item.story_preview_url} available={!!item.story_id} />}
+          {item.private_media ? <MessageMedia message={item} /> : item.media_url ? (
             <TouchableOpacity activeOpacity={0.9} onPress={() => setSelectedImageUri(item.media_url)}>
               <Image source={{ uri: item.media_url }} style={styles.msgImage} />
             </TouchableOpacity>
@@ -671,16 +618,11 @@ export default function ChatRoomScreen() {
                 hour12: false,
               })}
             </Text>
-            {recipientLastReadAt && new Date(item.created_at) <= new Date(recipientLastReadAt) ? (
+            {profile?.privacy_show_read_receipts !== false && recipientProfile?.privacy_show_read_receipts !== false && recipientLastReadAt && new Date(item.created_at) <= new Date(recipientLastReadAt) ? (
               <Ionicons 
                 name="checkmark-done" 
                 size={14} 
-                color={
-                  (profile?.privacy_show_read_receipts !== false) && 
-                  (recipientProfile?.privacy_show_read_receipts !== false)
-                    ? "#38BDF8"
-                    : "rgba(255, 255, 255, 0.6)"
-                } 
+                color="#38BDF8"
               />
             ) : (
               <Ionicons name="checkmark" size={14} color="rgba(255, 255, 255, 0.6)" />
@@ -765,8 +707,8 @@ export default function ChatRoomScreen() {
       {/* Message List & Input Bar inside KeyboardAvoidingView */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
       >
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -774,6 +716,7 @@ export default function ChatRoomScreen() {
           </View>
         ) : (
           <FlatList
+            keyboardShouldPersistTaps="handled"
             ref={flatListRef}
             data={messages}
             keyExtractor={(item) => item.id}
@@ -785,6 +728,7 @@ export default function ChatRoomScreen() {
           />
         )}
 
+        {peerTyping && <Text style={{ color: colors.textSecondary, paddingHorizontal: 20, paddingVertical: 4 }}>Yazıyor…</Text>}
         <View
           style={[
             styles.inputBarContainer,
@@ -796,7 +740,7 @@ export default function ChatRoomScreen() {
         >
           {/* Camera Button */}
           <TouchableOpacity
-            onPress={handleSendPhoto}
+            onPress={() => setComposerVisible(true)}
             style={styles.attachmentButton}
             disabled={isBlocked || sending}
           >
@@ -837,7 +781,7 @@ export default function ChatRoomScreen() {
                 },
               ]}
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={text => { setInputText(text); sendTyping(!!text.trim()); }}
               placeholder="Mesaj yazın..."
               placeholderTextColor={colors.textSecondary}
               multiline
@@ -864,6 +808,7 @@ export default function ChatRoomScreen() {
         </View>
       </KeyboardAvoidingView>
 
+      {composerVisible && <MediaComposer conversationId={conversationId} onClose={() => setComposerVisible(false)} onSent={() => { void fetchMessages(); }} />}
       {/* Diamond Gift Modal */}
       <Modal
         visible={giftModalVisible}

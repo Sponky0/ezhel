@@ -1,8 +1,8 @@
+import { registerDevicePushToken } from '../lib/pushRegistration';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { useCall } from '../contexts/CallContext';
@@ -25,10 +25,10 @@ if (Platform.OS !== 'web' && !isExpoGo) {
 if (Platform.OS !== 'web' && Notifications) {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
+      shouldShowAlert: false,
       shouldPlaySound: true,
       shouldSetBadge: true,
-      shouldShowBanner: true,
+      shouldShowBanner: false,
       shouldShowList: true,
     }),
   });
@@ -63,12 +63,11 @@ async function registerForPushNotificationsAsync() {
   // Get project ID from Constants
   const projectId =
     Constants.expoConfig?.extra?.eas?.projectId ??
-    Constants.easConfig?.projectId ??
-    'e550164f-6f8b-4a2c-a1ea-aa27b0f23a1a';
+    Constants.easConfig?.projectId;
 
   try {
     token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    console.log('Expo Push Token:', token);
+
   } catch (error) {
     console.error('Error fetching Expo push token:', error);
   }
@@ -88,35 +87,29 @@ async function registerForPushNotificationsAsync() {
 
 export function useNotifications() {
   const { user, profile } = useAuth();
+  const userId = user?.id;
+  const hasProfile = !!profile;
   const router = useRouter();
   const { setIncomingCall } = useCall();
   const notificationListener = useRef<any>(null);
   const responseListener = useRef<any>(null);
 
   useEffect(() => {
-    if (!user || !profile || !notificationsSupported || !Notifications) return;
+    if (!userId || !hasProfile || !notificationsSupported || !Notifications) return;
 
-    // Register token
-    registerForPushNotificationsAsync().then(async (token) => {
-      if (token) {
-        // Update user profile in Supabase
-        const { error } = await supabase
-          .from('profiles')
-          .update({ expo_push_token: token })
-          .eq('id', user.id);
-        
-        if (error) {
-          console.error('Failed to update push token in Supabase:', error);
-        } else {
-          console.log('Successfully registered push token in Supabase');
-        }
-      }
-    });
+    let cancelled = false;
+    registerForPushNotificationsAsync().then(async token => {
+      if (token && !cancelled) await registerDevicePushToken(userId, token);
+    }).catch(error => console.warn('Push registration failed:', error.message));
 
     // Listener for when a notification is received while the app is foregrounded
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification: any) => {
-        console.log('Foreground Notification Received:', notification);
+        // Foreground message banners are handled by the Realtime banner.
+        const data = notification.request.content.data;
+        if (data?.type === 'call_incoming' && data.callerId && data.conversationId) {
+          setIncomingCall({ callerId: data.callerId, callerName: data.senderName || 'Birisi', callerAvatar: data.callerAvatar || null, roomName: data.conversationId });
+        }
       }
     );
 
@@ -124,7 +117,7 @@ export function useNotifications() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response: any) => {
         const data = response.notification.request.content.data;
-        console.log('Notification Tapped Data:', data);
+
         
         if (data) {
           if (data.type === 'call_incoming' && data.conversationId) {
@@ -149,6 +142,7 @@ export function useNotifications() {
     );
 
     return () => {
+      cancelled = true;
       if (notificationListener.current) {
         notificationListener.current.remove();
       }
@@ -156,5 +150,5 @@ export function useNotifications() {
         responseListener.current.remove();
       }
     };
-  }, [user, profile, router, setIncomingCall]);
+  }, [userId, hasProfile, router, setIncomingCall]);
 }

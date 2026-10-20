@@ -1,10 +1,13 @@
+import { InstagramEditor, SocialPanel } from '../../components/SocialPanel';
+import { requestId } from '../../lib/requestId';
+import { initRevenueCat, getRevenueCatOfferings, purchaseRevenueCatPackage } from '../../lib/revenuecat';
 import { ActionModal } from "@/components/ActionModal";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -19,7 +22,6 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
 import { AppIcons } from "../../constants/icons";
 import { Colors, Spacing } from "../../constants/theme";
 import { useAuth } from "../../contexts/AuthContext";
@@ -47,6 +49,10 @@ interface DiamondWithdrawalRequest {
 
 export default function ProfileScreen() {
   const { profile, updateProfile, signOut, deleteAccount, user, refreshProfile } = useAuth();
+  const routeParams = useLocalSearchParams<{ boost?: string }>();
+  const paymentLock = useRef(false);
+  const boostLock = useRef(false);
+  const boostRequest = useRef<string | null>(null);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { themeSetting, setThemeSetting } = useThemeContext();
@@ -81,6 +87,7 @@ export default function ProfileScreen() {
   const [diamondPackages, setDiamondPackages] = useState<
     {
       id: string;
+      store_product_id?: string | null;
       amount: number;
       price: number;
       badge: string | null;
@@ -90,16 +97,11 @@ export default function ProfileScreen() {
   >([]);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<{
+    id: string;
     amount: number;
     price: number;
     badge: string | null;
   } | null>(null);
-  const [customDiamonds, setCustomDiamonds] = useState("");
-  const [customPrice, setCustomPrice] = useState(0);
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-  const [cardName, setCardName] = useState("");
   const [processingPayment, setProcessingPayment] = useState(false);
   const [withdrawalModalVisible, setWithdrawalModalVisible] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
@@ -125,6 +127,11 @@ export default function ProfileScreen() {
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [bankModalVisible, setBankModalVisible] = useState(false);
+  useEffect(() => {
+    if (!routeParams.boost) return;
+    const timer = setTimeout(() => setHighlightsModalVisible(true), 0);
+    return () => clearTimeout(timer);
+  }, [routeParams.boost]);
 
   const settingKeyMap: Record<string, string> = {
     match: "notification_new_matches",
@@ -306,13 +313,9 @@ export default function ProfileScreen() {
     }
   };
 
-  const [webViewVisible, setWebViewVisible] = useState(false);
-  const FIREBASE_OTP_WEB_URL =
-    "https://randomchatapp-754d7.web.app/phone-auth.html";
-
   // Sync state with profile loaded from AuthContext
   useEffect(() => {
-    if (profile) {
+    if (profile && !editProfileVisible) {
       const timer = setTimeout(() => {
         setUsername(profile.username);
         setBio(profile.bio || "");
@@ -325,7 +328,7 @@ export default function ProfileScreen() {
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [profile]);
+  }, [profile, editProfileVisible]);
 
   // Fetch profile highlight cost from system settings
   const fetchHighlightCost = useCallback(async () => {
@@ -467,7 +470,8 @@ export default function ProfileScreen() {
           message: "Profiliniz güncellendi.",
           type: "success",
         });
-        setAvatarUri(null); // Clear preview uri since DB is updated
+        setAvatarUri(null); // Clear preview only after a confirmed save
+        setEditProfileVisible(false);
       }
     } catch (err: any) {
       console.error("Save profile error:", err);
@@ -481,46 +485,13 @@ export default function ProfileScreen() {
     }
   };
 
-  // Simulate VIP upgrade (Modular for IAP billing later)
-  const handleUpgradeVip = async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      const nextVipState = !profile.is_vip;
-
-      const updates = {
-        is_vip: nextVipState,
-        vip_until: nextVipState
-          ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
-          : null,
-      };
-
-      const { error } = await updateProfile(updates);
-      if (error) throw error;
-
-      ActionModal.show({
-        title: (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: "bold", color: colors.text }}>Tebrikler</Text>
-            <MaterialCommunityIcons name="party-popper" size={20} color={colors.primary} />
-          </View>
-        ),
-        message: nextVipState
-          ? "Artık bir VIP üyesiniz! Sınırsız eşleşme ve öncelikli listelemenin tadını çıkarın."
-          : "VIP üyeliğiniz iptal edildi.",
-        type: "success",
-      });
-    } catch (err) {
-      console.error("Upgrade VIP error:", err);
-      ActionModal.show({
-        title: "Hata",
-        message: "VIP işlemi gerçekleştirilemedi.",
-        type: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Never simulate a paid entitlement by directly editing the protected profile.
+  const handleUpgradeVip = () => ActionModal.show({
+    title: 'VIP üyelik bilgileri',
+    message: profile?.is_vip
+      ? 'VIP durumunuz hesabınızda aktif. Mağazadan alınmış aboneliklerinizi Google Play/App Store abonelik ayarlarından yönetin.'
+      : 'VIP abonelik satışı henüz yapılandırılmadı. Etkinleştirildiğinde üyelik mağaza üzerinden doğrulanacaktır.',
+  });
 
   // Delete Account Handler (Apple App Store Guideline 5.1.1(v) compliance)
   const handleDeleteAccount = () => {
@@ -562,71 +533,26 @@ export default function ProfileScreen() {
 
   // Diamond Purchase Handler
   const handleBuyDiamonds = async () => {
-    const purchaseAmount =
-      selectedPackage?.amount || parseInt(customDiamonds) || 0;
-    const purchasePrice = selectedPackage?.price || customPrice;
-
-    if (purchaseAmount <= 0) {
-      ActionModal.show({
-        title: "Hata",
-        message: "Lütfen bir elmas paketi seçin veya özel miktar girin.",
-        type: "error",
-      });
-      return;
+    if (!user || paymentLock.current) return;
+    const item = diamondPackages.find(item => item.id === selectedPackage?.id);
+    const productId = item?.store_product_id;
+    if (!productId) {
+      ActionModal.show({ title: 'Mağaza ürünü hazır değil', message: 'Bu paket henüz Google Play/App Store ürünüyle eşleştirilmemiş. Kart bilgisi girmeyin.' }); return;
     }
-    if (
-      !cardNumber.trim() ||
-      !cardExpiry.trim() ||
-      !cardCvv.trim() ||
-      !cardName.trim()
-    ) {
-      ActionModal.show({
-        title: "Hata",
-        message: "Lütfen tüm kart bilgilerini doldurun.",
-        type: "error",
-      });
-      return;
-    }
-
-    setProcessingPayment(true);
+    paymentLock.current = true; setProcessingPayment(true);
     try {
-      const { error } = await supabase.rpc("buy_diamonds", {
-        amount: purchaseAmount,
-        price_paid: purchasePrice,
-      });
-      if (error) throw error;
-
-      await refreshProfile();
-
-      setPaymentModalVisible(false);
-      setCardNumber("");
-      setCardExpiry("");
-      setCardCvv("");
-      setCardName("");
-      setSelectedPackage(null);
-      setCustomDiamonds("");
-      setCustomPrice(0);
-
-      ActionModal.show({
-        title: (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: "bold", color: colors.text }}>Satın Alma Başarılı</Text>
-            <Ionicons name="diamond" size={20} color="#A855F7" />
-          </View>
-        ),
-        message: `${purchaseAmount} elmas hesabınıza eklendi!`,
-        type: "success",
-      });
-    } catch (err: any) {
-      console.error("Buy diamonds error:", err);
-      ActionModal.show({
-        title: "Hata",
-        message: err.message || "Elmas satın alınamadı.",
-        type: "error",
-      });
-    } finally {
-      setProcessingPayment(false);
-    }
+      if (!await initRevenueCat(user.id)) throw Error('Mağaza bağlantısı yapılandırılmamış.');
+      const offerings = await getRevenueCatOfferings();
+      const offeringPackages = Object.values(offerings?.all || {}).flatMap(offering => offering.availablePackages);
+      const purchasePackage = offeringPackages.find(item => item.product.identifier === productId);
+      if (!purchasePackage) throw Error('Mağaza paketi şu an kullanılamıyor.');
+      const result = await purchaseRevenueCatPackage(purchasePackage);
+      if (result.userCancelled) return;
+      if (result.error) throw result.error;
+      setPaymentModalVisible(false); void refreshProfile().catch(() => undefined);
+      ActionModal.show({ title: 'Ödeme alındı', message: 'Mağaza ödemeniz alındı. Elmaslar sunucu doğrulaması tamamlanınca hesabınıza yansıyacak.' });
+    } catch (error: any) { ActionModal.show({ title: 'Satın alma tamamlanamadı', message: error.message }); }
+    finally { paymentLock.current = false; setProcessingPayment(false); }
   };
 
   const resetWithdrawalForm = () => {
@@ -752,15 +678,19 @@ export default function ProfileScreen() {
         {
           text: "Öne Çıkar",
           onPress: async () => {
+            if (boostLock.current) return;
+            boostLock.current = true;
+            boostRequest.current ||= requestId();
             try {
               setLoading(true);
-              const { error } = await supabase.rpc("highlight_profile", {
-                p_duration_hours: 24,
+              const { error } = await supabase.rpc("boost_profile", {
+                p_request_id: boostRequest.current,
               });
 
               if (error) throw error;
 
               await refreshProfile();
+              boostRequest.current = null;
 
               ActionModal.show({
                 title: (
@@ -780,60 +710,13 @@ export default function ProfileScreen() {
                 type: "error",
               });
             } finally {
+              boostLock.current = false;
               setLoading(false);
             }
           },
         },
       ],
     });
-  };
-
-  const handleWebViewMessage = async (event: any) => {
-    try {
-      const messageData = JSON.parse(event.nativeEvent.data);
-      console.log("WebView Message Received (Profile):", messageData);
-
-      if (messageData.type === "firebase-auth-success") {
-        setWebViewVisible(false);
-        setLoading(true);
-
-        const { uid, phoneNumber } = messageData;
-        console.log(
-          `Firebase Verified Phone (Profile): ${phoneNumber}, UID: ${uid}`,
-        );
-
-        // Update profile in database
-        const { error } = await updateProfile({
-          phone_number: phoneNumber,
-          is_verified: true,
-        });
-
-        if (error) {
-          console.error("Error updating profile with phone number:", error);
-          ActionModal.show({
-            title: "Hata",
-            message:
-              "Telefon numarası profilinize kaydedilirken bir hata oluştu.",
-            type: "error",
-          });
-        } else {
-          ActionModal.show({
-            title: (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 18, fontWeight: "bold", color: colors.text }}>Başarılı</Text>
-                <MaterialCommunityIcons name="party-popper" size={20} color={colors.primary} />
-              </View>
-            ),
-            message: "Telefon numaranız başarıyla doğrulandı!",
-            type: "success",
-          });
-        }
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error("WebView Message Parse Error (Profile):", err);
-      setLoading(false);
-    }
   };
 
   return (
@@ -844,6 +727,11 @@ export default function ProfileScreen() {
       ]}
       edges={["top"]}
     >
+      <View style={{ flexDirection: 'row', padding: 12, justifyContent: 'space-around' }}>
+        <TouchableOpacity onPress={() => setBankModalVisible(true)}><Text style={{ color: colors.primary }}>💎 {profile?.diamonds || 0} · Elmas Mağazası</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setNotificationsModalVisible(true)}><Text style={{ color: colors.primary }}>Bildirimler</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/social')}><Text style={{ color: colors.primary }}>Gizlilik</Text></TouchableOpacity>
+      </View>
       <View style={styles.topBar}>
         <TouchableOpacity
           style={[
@@ -872,7 +760,8 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
+        {user && <SocialPanel userId={user.id} />}
         <View style={styles.profileArea}>
           <View
             style={[
@@ -932,7 +821,7 @@ export default function ProfileScreen() {
             onPress={() => setEditProfileVisible(true)}
           >
             <Text style={[styles.usernameText, { color: colors.text }]}>
-              {profile?.username || "Kullanıcı"}
+              {profile?.username || "Kullanıcı"}{profile?.email_verified_at ? " ✓" : ""}
             </Text>
             <View style={styles.plus}>
               <Text style={styles.plusText}>+</Text>
@@ -1347,7 +1236,7 @@ export default function ProfileScreen() {
                 borderColor: colors.border,
               },
             ]}
-            onPress={signOut}
+            onPress={() => { void signOut().catch(error => ActionModal.show({ title: 'Çıkış tamamlanamadı', message: error.message || 'Bildirim kaydı temizlenemedi. Bağlantınızı kontrol edip tekrar deneyin.' })); }}
           >
             <View
               style={{
@@ -1582,8 +1471,8 @@ export default function ProfileScreen() {
                 ) : (
                   <Text style={styles.vipToggleButtonText}>
                     {profile?.is_vip
-                      ? "VIP Üyeliği Sonlandır"
-                      : "Şimdi VIP Üye Ol (Simüle Et)"}
+                      ? "VIP Üyelik Bilgileri"
+                      : "VIP Üyelik Bilgileri"}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -2422,47 +2311,16 @@ export default function ProfileScreen() {
                 />
               </View>
 
-              {/* Telefon Doğrulaması Row */}
-              <View
-                style={{
-                  borderTopWidth: 1,
-                  borderTopColor: colors.border,
-                  paddingTop: 16,
-                  marginTop: 16,
-                }}
-              >
-                <Text style={[styles.label, { color: colors.textSecondary }]}>
-                  Telefon Doğrulaması
-                </Text>
-                {profile?.is_verified ? (
-                  <View style={styles.verifiedRow}>
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={18}
-                      color="#10B981"
-                    />
-                    <Text style={[styles.verifiedText, { color: colors.text }]}>
-                      Doğrulanmış Telefon: {profile.phone_number}
-                    </Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.verifyButton,
-                      { backgroundColor: colors.primary },
-                    ]}
-                    onPress={() => setWebViewVisible(true)}
-                  >
-                    <Ionicons
-                      name="phone-portrait-outline"
-                      size={18}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.verifyButtonText}>
-                      Telefon Numaranı Doğrula
-                    </Text>
-                  </TouchableOpacity>
-                )}
+              <InstagramEditor />
+              <View style={{ padding: 16, gap: 12 }}>
+                <Text style={{ color: colors.text }}>E-posta doğrulaması</Text>
+                <Text style={{ color: colors.textSecondary }}>{profile?.email_verified_at ? 'E-posta adresi doğrulandı ✓' : 'E-posta doğrulaması bekleniyor'}</Text>
+                <Text style={{ color: colors.textSecondary }}>Bu rozet e-posta sahipliğini gösterir; kimlik doğrulaması değildir.</Text>
+                <TouchableOpacity onPress={async () => {
+                  if (!user?.email) return;
+                  const { error } = await supabase.auth.resend({ type: 'signup', email: user.email });
+                  ActionModal.show({ title: error ? 'Gönderilemedi' : 'E-postanızı kontrol edin', message: error?.message || 'Doğrulama bağlantısını gelen kutusu ve spam klasöründe kontrol edin.' });
+                }}><Text style={{ color: colors.primary }}>Doğrulama e-postasını yeniden gönder</Text></TouchableOpacity>
               </View>
 
               {/* Save Button */}
@@ -2473,7 +2331,6 @@ export default function ProfileScreen() {
                 ]}
                 onPress={async () => {
                   await handleSave();
-                  setEditProfileVisible(false);
                 }}
                 disabled={loading}
               >
@@ -2837,11 +2694,11 @@ export default function ProfileScreen() {
                     key={pkg.id}
                     onPress={() => {
                       setSelectedPackage({
+                        id: pkg.id,
                         amount: pkg.amount,
                         price: pkg.price,
                         badge: pkg.badge,
                       });
-                      setCustomDiamonds("");
                       setPaymentModalVisible(true);
                     }}
                     style={{
@@ -2894,7 +2751,7 @@ export default function ProfileScreen() {
                         marginTop: 2,
                       }}
                     >
-                      {Number(pkg.price).toFixed(2)} TL
+                      Mağaza fiyatı ödeme ekranında
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -2905,52 +2762,7 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* 10. WebView Authentication Modal */}
-      <Modal
-        visible={webViewVisible}
-        animationType="slide"
-        onRequestClose={() => setWebViewVisible(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          {/* WebView Header bar */}
-          <View
-            style={[styles.webViewHeader, { borderBottomColor: colors.border }]}
-          >
-            <TouchableOpacity
-              onPress={() => setWebViewVisible(false)}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color={colors.text} />
-              <Text style={[styles.closeButtonText, { color: colors.text }]}>
-                Vazgeç
-              </Text>
-            </TouchableOpacity>
-            <Text style={[styles.webViewTitle, { color: colors.text }]}>
-              Telefon Doğrulama
-            </Text>
-            <View style={{ width: 60 }} />
-          </View>
 
-          {/* WebView containing the Firebase Phone OTP HTML Page */}
-          <WebView
-            source={{ uri: FIREBASE_OTP_WEB_URL }}
-            onMessage={handleWebViewMessage}
-            style={{ flex: 1, backgroundColor: colors.background }}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={true}
-            renderLoading={() => (
-              <View
-                style={[
-                  styles.webViewLoader,
-                  { backgroundColor: colors.background },
-                ]}
-              >
-                <ActivityIndicator size="large" color={colors.primary} />
-              </View>
-            )}
-          />
-        </SafeAreaView>
-      </Modal>
 
       {/* 11. Diamond Withdrawal Modal */}
       <Modal
@@ -3166,231 +2978,14 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* 12. Payment Simulation Modal */}
-      <Modal
-        visible={paymentModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setPaymentModalVisible(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "flex-end",
-            backgroundColor: "rgba(0,0,0,0.5)",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: colors.backgroundElement,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              padding: Spacing.five,
-              paddingBottom: Math.max(insets.bottom, 16) + Spacing.four,
-            }}
-          >
-            {/* Modal Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: Spacing.four,
-              }}
-            >
-              <Text
-                style={{ color: colors.text, fontSize: 20, fontWeight: "bold" }}
-              >
-                <Ionicons name="card" size={20} color={colors.primary} /> Ödeme
-              </Text>
-              <TouchableOpacity onPress={() => setPaymentModalVisible(false)}>
-                <Ionicons
-                  name="close-circle"
-                  size={28}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Summary */}
-            <View
-              style={{
-                backgroundColor: scheme === "dark" ? "#1E1B3A" : "#F3F0FF",
-                borderRadius: 16,
-                padding: Spacing.four,
-                alignItems: "center",
-                marginBottom: Spacing.four,
-              }}
-            >
-              <Ionicons name="diamond" size={40} color="#A855F7" />
-              <Text
-                style={{
-                  color: colors.text,
-                  fontSize: 28,
-                  fontWeight: "bold",
-                  marginTop: 8,
-                }}
-              >
-                {selectedPackage?.amount ?? 0} Elmas
-              </Text>
-              <Text
-                style={{
-                  color: "#A855F7",
-                  fontSize: 18,
-                  fontWeight: "600",
-                  marginTop: 4,
-                }}
-              >
-                {(selectedPackage?.price ?? 0).toFixed(2)} TL
-              </Text>
-            </View>
-
-            {/* Card Form */}
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 6,
-              }}
-            >
-              Kart Sahibinin Adı
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.background,
-                color: colors.text,
-                borderColor: colors.border,
-                borderWidth: 1,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                fontSize: 15,
-                marginBottom: 12,
-              }}
-              placeholder="Ad Soyad"
-              placeholderTextColor={colors.textSecondary}
-              value={cardName}
-              onChangeText={setCardName}
-            />
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 13,
-                marginBottom: 6,
-              }}
-            >
-              Kart Numarası
-            </Text>
-            <TextInput
-              style={{
-                backgroundColor: colors.background,
-                color: colors.text,
-                borderColor: colors.border,
-                borderWidth: 1,
-                borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                fontSize: 15,
-                marginBottom: 12,
-              }}
-              placeholder="0000 0000 0000 0000"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="numeric"
-              maxLength={19}
-              value={cardNumber}
-              onChangeText={setCardNumber}
-            />
-
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 12,
-                marginBottom: Spacing.four,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: 13,
-                    marginBottom: 6,
-                  }}
-                >
-                  Son Kullanma
-                </Text>
-                <TextInput
-                  style={{
-                    backgroundColor: colors.background,
-                    color: colors.text,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                    borderRadius: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    fontSize: 15,
-                  }}
-                  placeholder="AA/YY"
-                  placeholderTextColor={colors.textSecondary}
-                  maxLength={5}
-                  value={cardExpiry}
-                  onChangeText={setCardExpiry}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: 13,
-                    marginBottom: 6,
-                  }}
-                >
-                  CVV
-                </Text>
-                <TextInput
-                  style={{
-                    backgroundColor: colors.background,
-                    color: colors.text,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                    borderRadius: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    fontSize: 15,
-                  }}
-                  placeholder="***"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                  maxLength={4}
-                  secureTextEntry
-                  value={cardCvv}
-                  onChangeText={setCardCvv}
-                />
-              </View>
-            </View>
-
-            {/* Pay Button */}
-            <TouchableOpacity
-              onPress={handleBuyDiamonds}
-              disabled={processingPayment}
-              style={{
-                backgroundColor: "#A855F7",
-                borderRadius: 14,
-                paddingVertical: 16,
-                alignItems: "center",
-                opacity: processingPayment ? 0.6 : 1,
-              }}
-            >
-              {processingPayment ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text
-                  style={{ color: "#FFF", fontSize: 17, fontWeight: "bold" }}
-                >
-                  <Ionicons name="card" size={18} color="#FFF" /> Ödemeyi Tamamla —{" "}
-                  {(selectedPackage?.price ?? 0).toFixed(2)} TL
-                </Text>
-              )}
-            </TouchableOpacity>
+      {/* 12. Verified Store Checkout */}
+      <Modal visible={paymentModalVisible} transparent animationType="slide" onRequestClose={() => { if (!processingPayment) setPaymentModalVisible(false); }}>
+        <View style={{ flex: 1, backgroundColor: '#000a', justifyContent: 'center', padding: 28 }}>
+          <View style={{ backgroundColor: colors.background, borderRadius: 20, padding: 24, gap: 20 }}>
+            <Text style={{ color: colors.text, fontSize: 22 }}>Elmas satın al</Text>
+            <Text style={{ color: colors.text }}>Ödeme Google Play / App Store üzerinden yapılır. Napan kart bilgilerinizi toplamaz.</Text>
+            <TouchableOpacity disabled={processingPayment} onPress={handleBuyDiamonds}><Text style={{ color: colors.primary }}>{processingPayment ? 'İşleniyor…' : 'Mağazada devam et'}</Text></TouchableOpacity>
+            <TouchableOpacity disabled={processingPayment} onPress={() => setPaymentModalVisible(false)}><Text style={{ color: colors.text }}>Vazgeç</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>

@@ -1,3 +1,4 @@
+import MediaComposer from '../../components/MediaComposer';
 /* eslint-disable react-hooks/immutability */
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
@@ -14,6 +15,7 @@ import {
   LayoutChangeEvent,
   Modal,
   Platform,
+  PanResponder,
   RefreshControl,
   StyleSheet,
   Text,
@@ -87,6 +89,7 @@ interface Story {
   music_title: string | null;
   is_highlight: boolean;
   created_at: string;
+  media_source?: string;
   media_transform?: {
     scale: number;
     translateX: number;
@@ -207,6 +210,14 @@ export default function StoriesScreen() {
   // Compose (create story) state
   const [composeImageUri, setComposeImageUri] = useState<string | null>(null);
   const [composeImageExt, setComposeImageExt] = useState<string>("jpg");
+  const [composeSource, setComposeSource] = useState<'gallery' | 'camera'>('gallery');
+  const [replyMedia, setReplyMedia] = useState<{ conversationId: string; storyId: string } | null>(null);
+  const shareLock = useRef(false);
+  const replyLock = useRef(false);
+  const dismissGesture = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 40 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.4,
+    onPanResponderRelease: () => setStoriesFinished(true),
+  })).current;
   const [sharing, setSharing] = useState(false);
 
   // Shared values for pinch & pan gestures in the composer
@@ -322,6 +333,7 @@ export default function StoriesScreen() {
           is_highlight,
           created_at,
           media_transform,
+          media_source,
           profiles:user_id (
             username,
             avatar_url,
@@ -567,22 +579,14 @@ export default function StoriesScreen() {
   };
 
   const handleSendReply = async (textParam?: string) => {
-    if (!user || !currentStory) return;
+    if (!user || !currentStory || replyLock.current) return;
     const text = typeof textParam === "string" ? textParam.trim() : replyText.trim();
     if (!text) return;
 
+    replyLock.current = true;
     setSendingReply(true);
     try {
-      const { conversationId } = await findOrCreateConversation(
-        user.id,
-        currentStory.user_id
-      );
-
-      const { error } = await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        sender_id: user.id,
-        content: `🎬 Güncellemene cevap: ${text}`,
-      });
+      const { error } = await supabase.rpc('send_story_reply', { p_story_id: currentStory.id, p_text: text });
 
       if (error) throw error;
 
@@ -602,14 +606,14 @@ export default function StoriesScreen() {
         type: "error",
       });
     } finally {
+      replyLock.current = false;
       setSendingReply(false);
     }
   };
 
-  const pickMedia = async (mediaType: "photo" | "video") => {
+  const pickMedia = async (mediaType: "photo" | "video", source: "camera" | "gallery" = "gallery") => {
     try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permissionResult = source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
         ActionModal.show({
           title: "İzin Gerekli",
@@ -619,14 +623,13 @@ export default function StoriesScreen() {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: mediaType === "photo" ? ["images"] : ["videos"],
-        allowsEditing: mediaType === "photo",
-        quality: 0.8,
-      });
+      const options: ImagePicker.ImagePickerOptions = { mediaTypes: mediaType === 'photo' ? ['images'] : ['videos'], allowsEditing: mediaType === 'photo', quality: 0.8, videoMaxDuration: 30 };
+      const result = source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
+        if ((asset.fileSize || 0) > 15 * 1024 * 1024) throw Error('En fazla 15 MB içerik paylaşılabilir.');
+        setComposeSource(source);
         setComposeImageUri(asset.uri);
         setComposeImageExt(getAssetExtension(asset));
       }
@@ -645,8 +648,10 @@ export default function StoriesScreen() {
       title: "Güncelleme Ekle",
       message: "Ne paylaşmak istersin?",
       buttons: [
-        { text: "Fotoğraf", onPress: () => pickMedia("photo") },
-        { text: "Video", onPress: () => pickMedia("video") },
+        { text: "Galeriden fotoğraf", onPress: () => pickMedia("photo") },
+        { text: "Galeriden video", onPress: () => pickMedia("video") },
+        { text: "Kamera · fotoğraf", onPress: () => pickMedia("photo", "camera") },
+        { text: "Kamera · video", onPress: () => pickMedia("video", "camera") },
         { text: "Vazgeç", style: "cancel" },
       ],
     });
@@ -658,7 +663,8 @@ export default function StoriesScreen() {
   };
 
   const handleShareStory = async () => {
-    if (!composeImageUri || !user) return;
+    if (!composeImageUri || !user || shareLock.current) return;
+    shareLock.current = true;
     setSharing(true);
     setUploading(true);
     try {
@@ -668,6 +674,7 @@ export default function StoriesScreen() {
       const { error } = await supabase.from("stories").insert({
         user_id: user.id,
         media_url: publicUrl,
+        media_source: composeSource,
         media_transform: {
           scale: scale.value,
           translateX: translateX.value,
@@ -698,6 +705,7 @@ export default function StoriesScreen() {
         type: "error",
       });
     } finally {
+      shareLock.current = false;
       setSharing(false);
       setUploading(false);
     }
@@ -742,7 +750,7 @@ export default function StoriesScreen() {
     } : {};
 
     return (
-      <View style={{ width: screenWidth, height: containerHeight, justifyContent: "center", alignItems: "center", backgroundColor: "#000" }}>
+      <View {...dismissGesture.panHandlers} style={{ width: screenWidth, height: containerHeight, justifyContent: "center", alignItems: "center", backgroundColor: "#000" }}>
         <View style={{ width: storyWidth, height: storyHeight, overflow: "hidden", borderRadius: 12, backgroundColor: "#111", position: "relative" }}>
           {isVideoUrl(item.media_url) ? (
             <AnimatedReanimated.View style={[StyleSheet.absoluteFill, transformStyle]}>
@@ -761,6 +769,22 @@ export default function StoriesScreen() {
             />
           )}
 
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 160, flexDirection: 'row' }}>
+            <TouchableOpacity accessibilityLabel="Önceki hikâye" style={{ flex: 1 }} onPress={() => {
+              const next = Math.max(0, activeIndex - 1); setActiveIndex(next); flatListRef.current?.scrollToIndex({ index: next, animated: true });
+            }} />
+            <TouchableOpacity accessibilityLabel="Sonraki hikâye" style={{ flex: 1 }} onPress={() => {
+              const next = activeIndex + 1;
+              if (next >= flatStories.length) { setStoriesFinished(true); return; }
+              setActiveIndex(next); flatListRef.current?.scrollToIndex({ index: next, animated: true });
+            }} />
+          </View>
+          <Text style={{ position: 'absolute', top: 12, left: 12, color: '#fff', backgroundColor: '#0007', padding: 5 }}>{item.media_source === 'camera' ? 'Anlık' : item.media_source === 'gallery' ? 'Galeriden paylaşıldı' : ''}</Text>
+          {!isOwner && <TouchableOpacity style={{ position: 'absolute', right: 12, top: 12, padding: 10, backgroundColor: '#0009', borderRadius: 16 }} onPress={async () => {
+            if (!user) return;
+            try { const { conversationId } = await findOrCreateConversation(user.id, item.user_id); setReplyMedia({ conversationId, storyId: item.id }); }
+            catch (e: any) { ActionModal.show({ title: 'Yanıt açılamadı', message: e.message }); }
+          }}><Text style={{ color: '#fff' }}>Fotoğraf / video ile yanıtla</Text></TouchableOpacity>}
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={StyleSheet.absoluteFill}
@@ -1136,6 +1160,7 @@ export default function StoriesScreen() {
         </View>
 
         {composeImageUri && renderComposeModal()}
+      {replyMedia && <MediaComposer conversationId={replyMedia.conversationId} storyId={replyMedia.storyId} onClose={() => setReplyMedia(null)} onSent={() => {}} />}
       </SafeAreaView>
     );
   }
@@ -1203,14 +1228,16 @@ export default function StoriesScreen() {
             data={flatStories}
             renderItem={renderStoryItem}
             keyExtractor={(item) => item.id}
+            horizontal
+            keyboardShouldPersistTaps="handled"
             pagingEnabled={true}
             decelerationRate="fast"
             showsVerticalScrollIndicator={false}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={VIEWABILITY_CONFIG}
             getItemLayout={(data, index) => ({
-              length: containerHeight,
-              offset: containerHeight * index,
+              length: screenWidth,
+              offset: screenWidth * index,
               index,
             })}
             removeClippedSubviews={Platform.OS === "android"}

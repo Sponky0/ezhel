@@ -7,6 +7,7 @@ import {
   useCallback,
   useImperativeHandle,
   useState,
+  useRef,
   ReactNode,
 } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -120,6 +121,7 @@ export const ActionModalProvider = forwardRef<ActionModalRef>(
     const insets = useSafeAreaInsets();
 
     // Alert state
+    const dismissing = useRef(false);
     const [visible, setVisible] = useState(false);
     const [options, setOptions] = useState<ActionModalOptions | null>(null);
 
@@ -188,10 +190,15 @@ export const ActionModalProvider = forwardRef<ActionModalRef>(
 
     const dismissAlert = useCallback(
       (onPress?: () => void | Promise<void>) => {
+        if (dismissing.current) return;
+        dismissing.current = true;
         animateOut(() => {
           setVisible(false);
           setOptions(null);
-          onPress?.();
+          dismissing.current = false;
+          Promise.resolve().then(() => onPress?.()).catch(error => {
+            ActionModal.show({ title: 'İşlem tamamlanamadı', message: error instanceof Error ? error.message : 'Tekrar deneyin.', type: 'error' });
+          });
         });
       },
       [animateOut],

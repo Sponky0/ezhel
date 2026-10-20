@@ -1,5 +1,7 @@
+import { withTimeout } from '../lib/async';
+import { detachPushRegistration } from '../lib/pushRegistration';
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus, Alert, Platform } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
@@ -21,6 +23,8 @@ interface Profile {
   bio: string | null;
   phone_number: string | null;
   is_verified: boolean;
+  email_verified_at?: string | null;
+  edit_version?: number;
   language?: string | null;
   country?: string | null;
   age?: number | null;
@@ -43,6 +47,8 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  authError: string | null;
+  retryAuth: () => void;
   maintenanceMode: boolean;
   isLoginModalVisible: boolean;
   showCongratsModal: boolean;
@@ -66,7 +72,7 @@ interface AuthContextType {
     gender: 'male' | 'female' | null;
     hobbies: string[];
     age: number | null;
-  }) => Promise<{ error: any }>;
+  }) => Promise<{ error: any; confirmationRequired?: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -76,6 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const authEpochRef = useRef(0);
+  const activeUserIdRef = useRef<string | null>(null);
+  const profileVersionRef = useRef(0);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [isLoginModalVisible, setLoginModalVisible] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
@@ -88,203 +98,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoginModalVisible(false);
   }, []);
 
-  // Force refresh session when token is expired
-  const forceRefreshSession = useCallback(async (): Promise<boolean> => {
-    try {
-      console.log('Attempting to manually refresh expired session...');
-      const { data, error } = await supabase.auth.refreshSession();
-      if (error) {
-        console.error('Failed to manually refresh session:', error);
-        // Refresh token failed/expired as well. Must sign out.
-        await supabase.auth.signOut();
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        Alert.alert(
-          'Oturum Süresi Doldu',
-          'Oturum süreniz dolduğu için çıkış yapıldı. Lütfen tekrar giriş yapın.',
-          [{ text: 'Tamam' }]
-        );
-        return false;
-      }
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.session.user);
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Error in forceRefreshSession:', err);
-      await supabase.auth.signOut();
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      Alert.alert(
-        'Oturum Süresi Doldu',
-        'Oturum süreniz dolduğu için çıkış yapıldı. Lütfen tekrar giriş yapın.',
-        [{ text: 'Tamam' }]
-      );
-      return false;
+  // Profile creation belongs to the auth trigger. Never upsert role or mutable
+  // draft fields from an auth callback, and never hold Supabase's auth lock here.
+  const refreshProfile = useCallback(async (userId?: string) => {
+    const id = userId || activeUserIdRef.current;
+    if (!id) return;
+    const version = ++profileVersionRef.current;
+    const { data, error } = await withTimeout(supabase.from('profiles').select('*').eq('id', id).single());
+    if (error || !data) throw new Error(error?.message || 'Profil yüklenemedi. Tekrar deneyin.');
+    if (version === profileVersionRef.current && activeUserIdRef.current === id) {
+      setProfile(previous => previous?.id === id && (previous.edit_version || 0) > (data.edit_version || 0) ? previous : data);
     }
   }, []);
 
-  // Function to load/refresh the user profile from database
-  const refreshProfile = useCallback(async (userId?: string) => {
-    const id = userId || user?.id;
-    if (!id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        if (error.code === 'PGRST116') {
-          // Profile missing (e.g. initial Google OAuth sign-in)
-          const { data: userData } = await supabase.auth.getUser();
-          if (userData?.user) {
-            const meta = userData.user.user_metadata || {};
-            const generatedUsername = meta.full_name || meta.name || userData.user.email?.split('@')[0] || `user_${id.substring(0, 6)}`;
-            const avatarUrl = meta.avatar_url || meta.picture || null;
-
-            const { data: newProfile, error: createError } = await supabase
-              .from('profiles')
-              .upsert({
-                id: id,
-                username: generatedUsername,
-                avatar_url: avatarUrl,
-                role: 'user',
-              }, { onConflict: 'id' })
-              .select('*')
-              .single();
-
-            if (!createError && newProfile) {
-              setProfile(newProfile);
-              return;
-            }
-          }
-        }
-        if (error.message?.includes('JWT expired') || error.code === 'PGRST303') {
-          const refreshed = await forceRefreshSession();
-          if (refreshed) {
-            // Retry once
-            const { data: retryData, error: retryError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', id)
-              .single();
-            if (!retryError) {
-              setProfile(retryData);
-            } else {
-              console.error('Error fetching profile after retry:', retryError);
-            }
-          }
-        }
-      } else {
-        setProfile(data);
-      }
-    } catch (err) {
-      console.error('Unexpected error fetching profile:', err);
-    }
-  }, [user?.id, forceRefreshSession]);
-
-  // Sign in anonymously if no session exists
   const ensureAuth = useCallback(async () => {
+    setLoading(true); setAuthError(null);
+    const epoch = authEpochRef.current;
     try {
-      // Fetch maintenance mode state
-      const { data: maintData, error: maintError } = await supabase
-        .from('system_settings')
-        .select('value')
-        .eq('key', 'maintenance_mode')
-        .maybeSingle();
-      if (!maintError && maintData) {
-        setMaintenanceMode(maintData.value === 'true');
-      }
-
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      
-      if (currentSession) {
-        const isExpired = currentSession.expires_at 
-          ? currentSession.expires_at < Math.floor(Date.now() / 1000) + 10
-          : false;
-
-        if (isExpired) {
-          console.log('Session is expired on startup, refreshing...');
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError || !refreshData.session) {
-            console.error('Failed to refresh expired session on startup, signing out...');
-            await supabase.auth.signOut();
-            setSession(null);
-            setUser(null);
-            setProfile(null);
-            setLoading(false);
-            Alert.alert(
-              'Oturum Süresi Doldu',
-              'Oturum süreniz dolduğu için çıkış yapıldı. Lütfen tekrar giriş yapın.',
-              [{ text: 'Tamam' }]
-            );
-            return;
-          } else {
-            setSession(refreshData.session);
-            setUser(refreshData.session.user);
-            await refreshProfile(refreshData.session.user.id);
-            setLoading(false);
-            return;
-          }
-        }
-
-        setSession(currentSession);
-        setUser(currentSession.user);
-        await Promise.all([
-          refreshProfile(currentSession.user.id),
-          initRevenueCat(currentSession.user.id),
-        ]);
-        setLoading(false);
-      } else {
-        // Oturum yok, kullanıcının giriş yapması bekleniyor
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error('Auth initialization error:', err);
-      setLoading(false);
-    }
+      const { data, error } = await withTimeout(supabase.auth.getSession());
+      if (error) throw error;
+      if (epoch !== authEpochRef.current) return;
+      activeUserIdRef.current = data.session?.user.id ?? null;
+      setSession(data.session); setUser(data.session?.user ?? null);
+      if (data.session) {
+        await withTimeout(refreshProfile(data.session.user.id));
+        void initRevenueCat(data.session.user.id);
+      } else setProfile(null);
+      void supabase.from('system_settings').select('value').eq('key', 'maintenance_mode').maybeSingle()
+        .then(({ data }) => { if (data) setMaintenanceMode(data.value === 'true'); });
+    } catch (error) {
+      if (epoch === authEpochRef.current) setAuthError(error instanceof Error ? error.message : 'Oturum yüklenemedi.');
+    } finally { if (epoch === authEpochRef.current) setLoading(false); }
   }, [refreshProfile]);
-
-  // En güncel callback'leri ref'te tut; böylece aşağıdaki abonelik effect'i
-  // her auth değişiminde (user?.id değişince) yeniden abone olmak zorunda kalmaz.
   const ensureAuthRef = useRef(ensureAuth);
   const refreshProfileRef = useRef(refreshProfile);
-
+  useEffect(() => { ensureAuthRef.current = ensureAuth; refreshProfileRef.current = refreshProfile; });
   useEffect(() => {
-    ensureAuthRef.current = ensureAuth;
-    refreshProfileRef.current = refreshProfile;
-  });
+    let active = true;
+    const pending = new Set<ReturnType<typeof setTimeout>>();
+    const timer = setTimeout(() => { void ensureAuthRef.current(); }, 0);
+    // Supabase holds its auth lock during this callback. Never await another
+    // Supabase request inside it: that deadlocks session initialization.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      authEpochRef.current++;
+      activeUserIdRef.current = nextSession?.user.id ?? null;
+      profileVersionRef.current++;
+      setAuthError(null); setSession(nextSession); setUser(nextSession?.user ?? null);
+      if (!nextSession) { setProfile(null); setLoading(false); return; }
+      const task = setTimeout(() => {
+        pending.delete(task);
+        if (!active || activeUserIdRef.current !== nextSession.user.id) return;
+        void withTimeout(refreshProfileRef.current(nextSession.user.id))
+          .catch(error => { if (active && activeUserIdRef.current === nextSession.user.id) setAuthError(error.message); })
+          .finally(() => { if (active && activeUserIdRef.current === nextSession.user.id) setLoading(false); });
+      }, 0);
+      pending.add(task);
+    });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      ensureAuthRef.current();
-    }, 0);
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-
-        if (newSession?.user) {
-          await refreshProfileRef.current(newSession.user.id);
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
-      }
-    );
+    void supabase.from('system_settings').select('value').eq('key', 'maintenance_mode').maybeSingle()
+      .then(({ data }) => { if (active && data) setMaintenanceMode(data.value === 'true'); });
 
     // Subscribe to system_settings changes for real-time maintenance mode updates
     const settingsChannel = supabase
@@ -301,6 +173,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => {
+      active = false;
+      for (const task of pending) clearTimeout(task);
       subscription.unsubscribe();
       supabase.removeChannel(settingsChannel);
       clearTimeout(timer);
@@ -324,7 +198,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         (payload) => {
           if (payload.new) {
-            setProfile(payload.new as Profile);
+            const incoming = payload.new as Profile;
+            setProfile(previous => previous?.id === incoming.id && (previous.edit_version || 0) > (incoming.edit_version || 0) ? previous : incoming);
           }
         }
       )
@@ -340,14 +215,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return { error: 'No user signed in' };
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-
-      if (!error) {
-        await refreshProfile();
-      }
+      const version = ++profileVersionRef.current;
+      const { data, error } = await supabase.from('profiles').update(updates).eq('id', user.id).select('*').single();
+      if (!error && data && version === profileVersionRef.current && activeUserIdRef.current === user.id) setProfile(previous => previous && previous.id === data.id && (previous.edit_version || 0) > (data.edit_version || 0) ? previous : data);
       return { error };
     } catch (err) {
       console.error('Error updating profile:', err);
@@ -356,73 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Sign in using verified Firebase UID
-  const signInWithFirebaseUid = async (uid: string) => {
-    const email = `${uid.toLowerCase()}@gmail.com`;
-    // Firebase UID is already secure and unique. We append a short salt to keep it below Supabase's 72-char limit.
-    const password = `${uid}_rcsalt`;
-    
-    try {
-      // 1. Try to sign in
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        // 2. If user doesn't exist, sign up
-        if (error.message?.includes('Invalid login credentials') || error.status === 400) {
-          console.log('User not found, registering new profile...');
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-          });
-
-          if (signUpError) {
-            console.error('Supabase Sign Up error:', signUpError);
-            return { error: signUpError };
-          }
-
-          if (signUpData.session) {
-            setSession(signUpData.session);
-            setUser(signUpData.session.user);
-            // Wait a brief moment for PostgreSQL trigger to create profiles row
-            setTimeout(async () => {
-              await refreshProfile(signUpData.session!.user.id);
-            }, 1000);
-            return { error: null };
-          } else {
-            // Fallback: Try signing in immediately
-            const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
-              email,
-              password,
-            });
-            if (retryError) {
-              return { error: retryError };
-            }
-            if (retryData.session) {
-              setSession(retryData.session);
-              setUser(retryData.session.user);
-              await refreshProfile(retryData.session.user.id);
-            }
-            return { error: null };
-          }
-        } else {
-          console.error('Supabase Sign In error:', error);
-          return { error };
-        }
-      }
-
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.session.user);
-        await refreshProfile(data.session.user.id);
-      }
-      return { error: null };
-    } catch (err) {
-      console.error('Supabase Phone Auth Bridge unexpected error:', err);
-      return { error: err };
-    }
-  };
+  const signInWithFirebaseUid = async (_uid: string) => ({ error: new Error('Lütfen e-posta adresinizle giriş yapın. Telefon giriş köprüsü kaldırıldı.') });
 
   // Sign in using username and 6-digit PIN (with brute force protection)
   const signInWithUsernameAndPin = async (username: string, pin: string) => {
@@ -548,6 +352,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: {
           data: {
             username: cleanUsername,
+            country: params.country, language: params.language, gender: params.gender,
+            age: params.age, hobbies: params.hobbies,
           }
         }
       });
@@ -556,6 +362,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: signUpError };
       }
       
+      if (!data.session) return { error: null, confirmationRequired: true };
+
       const targetUser = data.user || data.session?.user;
       if (!targetUser) {
         return { error: new Error('Kayıt oluşturuldu fakat oturum açılamadı.') };
@@ -614,13 +422,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Sign out
   const signOut = async () => {
+    if (!user) return;
     setLoading(true);
-    await resetUserSession();
-    await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setLoading(false);
+    try {
+      // Revoke the server device binding before destroying the authenticated session.
+      await withTimeout(detachPushRegistration(user.id));
+      const { error } = await withTimeout(supabase.auth.signOut({ scope: 'local' }));
+      if (error) throw error;
+      activeUserIdRef.current = null; profileVersionRef.current++;
+      setSession(null); setUser(null); setProfile(null);
+      void resetUserSession();
+    } finally { setLoading(false); }
   };
 
   // Delete Account (Apple App Store Guideline 5.1.1(v) compliance)
@@ -738,6 +550,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     loading,
+    authError,
+    retryAuth: () => { void ensureAuthRef.current(); },
     maintenanceMode,
     isLoginModalVisible,
     showCongratsModal,

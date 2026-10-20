@@ -1,3 +1,5 @@
+> Güncel Napan değişiklikleri, yerel test sonuçları ve mevcut Supabase projesine uygulama sırası: [Kullanıcı raporu uygulama kaydı](docs/KULLANICI_RAPORU_UYGULAMA.md). Yeni özellikler için backend geçişi ve yeni APK gerekir.
+
 # 🎙️ Anonim Random Chat & Sesli Görüşme Uygulaması
 
 Kullanıcıların anonim olarak birebir sesli eşleşebildiği, gerçek zamanlı sohbet edebildiği, hikaye (Story) paylaşabildiği ve elmas ekonomisi / VIP üyelik sistemi barındıran mobil ve web sosyal iletişim uygulaması.
@@ -11,7 +13,7 @@ Kullanıcıların anonim olarak birebir sesli eşleşebildiği, gerçek zamanlı
 - **Sesli Görüşme (WebRTC):** `react-native-webrtc` + **Coturn (STUN/TURN)** Sunucu Entegrasyonu
 - **Ses Cihazı Yönetimi:** `react-native-incall-manager` (Bluetooth, Kulaklık, Ahize & Hoparlör Geçişi)
 - **Uygulama İçi Satın Alım (IAP):** `react-native-purchases` (RevenueCat)
-- **Güvenlik & Obfuscation:** `javascript-obfuscator` + `obfuscator-io-metro-plugin` (Production Build Koruması)
+- **Derleme:** Expo Metro/Hermes. Eski obfuscator SDK 56 eager paketlemesini bozduğu için devre dışıdır; yetkiler RLS ve sunucu işlemleriyle korunur.
 
 ---
 

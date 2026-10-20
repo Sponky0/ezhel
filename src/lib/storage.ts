@@ -21,8 +21,11 @@ function getContentType(nameOrPath: string): string {
     case 'mp3':
       return 'audio/mpeg';
     case 'm4a':
-    case 'mp4':
       return 'audio/mp4';
+    case 'mp4':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
     case 'wav':
       return 'audio/wav';
     case 'aac':
@@ -42,7 +45,7 @@ function getContentType(nameOrPath: string): string {
  * @param uri React Native local file URI (from image/document picker)
  * @returns The public URL of the uploaded file
  */
-export async function uploadFile(bucket: string, path: string, uri: string): Promise<string> {
+export async function uploadFile(bucket: string, path: string, uri: string, allowExistingPrivate = false): Promise<string> {
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session) {
     throw new Error("Dosya yüklemek için tekrar giriş yapın.");
@@ -71,9 +74,11 @@ export async function uploadFile(bucket: string, path: string, uri: string): Pro
     upsert: false,
   });
 
-  if (error) {
+  if (error && !(allowExistingPrivate && bucket === 'private_chat' && String(error.statusCode) === '409')) {
     throw new Error(`Dosya yüklenemedi (${error.statusCode || 'Storage'}): ${error.message}`);
   }
+
+  if (bucket === 'private_chat') return path;
 
   // Get public URL
   const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path);

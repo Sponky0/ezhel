@@ -408,7 +408,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
     setLoading(true);
     const calculatedAge = calculateAge(regBirthday);
 
-    const { error } = await signUpWithOnboarding({
+    const { error, confirmationRequired } = await signUpWithOnboarding({
       username: regUsername,
       email: regEmail,
       passwordSecret: regPassword,
@@ -425,6 +425,9 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
         "Kayıt Başarısız",
         error.message || "Kayıt işlemi sırasında bir hata oluştu.",
       );
+    } else if (confirmationRequired) {
+      Alert.alert('E-postanızı doğrulayın', 'Gelen kutunuza gönderilen bağlantıyı açın, ardından e-posta ve şifrenizle giriş yapın. Spam klasörünü de kontrol edin.');
+      setViewState('login');
     } else {
       setShowCongratsModal(true);
       if (onClose) onClose();
@@ -1061,8 +1064,8 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                           { color: colors.textSecondary },
                         ]}
                       >
-                        Onayladıktan sonra doğum günü ve cinsiyet
-                        değiştirilemez.
+                        Kayıt bilgilerinizi doğru girin. E-posta adresinizi
+                        doğrulamanız gerekecek.
                       </Text>
 
                       {/* Kullanıcı Adı */}
