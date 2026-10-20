@@ -56,3 +56,7 @@ kurulum sırasında kullanılan uyarlanmış dosya ayrıca hazırlanmıştır.
 
 Firebase UID köprüsü ve satın alma akışlarına ilişkin güvenlik incelemesi,
 web hosting ayarları ve iOS kurulumu tamamlanmış sayılmaz.
+
+## Preview derlemesi düzeltmesi
+
+Expo SDK 56 `export:embed --eager` geçici çıktı klasörü kullanır. Mevcut obfuscator eklentisi bu yolu bulamadığı için preview EAS derlemesi paketleme sonrasında çöküyordu. Yalnızca `EAS_BUILD_PROFILE=preview` için obfuscator yüklenmez. Aynı eager paketleme komutu bu ayarla başarıyla doğrulandı; bu bir native APK derlemesi değildir. Production obfuscator ayarı korunmuştur ve uyumluluğu yayın öncesi ayrıca çözülmelidir.

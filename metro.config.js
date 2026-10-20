@@ -6,7 +6,9 @@ const isProduction = process.env.NODE_ENV === 'production' ||
                      process.env.EAS_BUILD_PROFILE === 'production' || 
                      process.env.EAS_BUILD_PROFILE === 'preview';
 
-if (isProduction) {
+// Expo SDK 56 eager native bundles use temporary output paths that this
+// obfuscator cannot discover. Keep preview APK builds free of this plugin.
+if (isProduction && process.env.EAS_BUILD_PROFILE !== 'preview') {
   const jsoMetroPlugin = require('obfuscator-io-metro-plugin')({
     compact: true,
     controlFlowFlattening: false, // Performance & Hermes compatibility
