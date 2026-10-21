@@ -1,3 +1,5 @@
+> Bu kayıt v1 içindir. V1 SQL zaten uygulandıysa tekrar çalıştırmayın. Yeni tasarım, süper mesaj ve arama geçişi için [v2 kaydını](TASARIM_VE_ARAMA_V2.md) kullanın.
+
 # Napan kullanıcı raporu: değişiklik ve devreye alma
 
 20 Ekim 2026. Kod ve eklemeli veritabanı geçişleri `napan-setup` dalında hazırlandı. Bu belge, **yerel doğrulamayı canlı sistem ve gerçek cihaz kanıtından ayırır**. Mevcut APK bu değişiklikleri içermez.

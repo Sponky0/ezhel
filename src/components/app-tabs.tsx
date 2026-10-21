@@ -41,7 +41,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="stories"
         options={{
-          title: "Güncellemeler",
+          title: "Hikâyeler",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "flame" : AppIcons.hot}
@@ -80,7 +80,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Siz",
+          title: "Profil",
           tabBarIcon: ({ color, focused }) => {
             if (profile?.avatar_url) {
               return (

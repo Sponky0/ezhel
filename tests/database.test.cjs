@@ -100,9 +100,43 @@ await t.test('private typing channel policies reject outsiders and allow both pa
 });
 });
 
+test('boost-origin super messages and durable story likes',async t=>{
+ const db=await setup();t.after(()=>db.close());
+ await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/patches/real-user-report.sql'),'utf8'));
+ await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations/0034_boost_super_messages.sql'),'utf8'));
+ const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222',c='33333333-3333-4333-8333-333333333333';
+ const q=(sql,params=[])=>db.query(sql,params);
+ for(const [id,name] of [[a,'alice'],[b,'bob'],[c,'carol']])await q('insert into auth.users(id,raw_user_meta_data) values($1,$2)',[id,JSON.stringify({username:name})]);
+ async function as(id,fn){await q("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claim.role','authenticated',false)",[id]);await db.exec('set role authenticated');try{return await fn();}finally{await db.exec('reset role');}}
+ const summary=async()=> (await as(b,()=>q('select social_summary($1) s',[b]))).rows[0].s;
+ let conv;
+ await t.test('paid active boost visit alone is not a super message',async()=>{await q('update profiles set diamonds=1000 where id=$1',[b]);await as(b,()=>q('select boost_profile(gen_random_uuid())'));conv=(await as(a,()=>q('select open_boost_conversation($1) id',[b]))).rows[0].id;assert.equal((await summary()).super_messages,0);});
+ await t.test('first inbound message counts once, repeated visits and messages do not inflate',async()=>{await as(a,()=>q("insert into messages(conversation_id,sender_id,content) values($1,$2,'hi')",[conv,a]));assert.equal((await summary()).super_messages,1);await as(a,()=>q('select open_boost_conversation($1)',[b]));await as(a,()=>q("insert into messages(conversation_id,sender_id,content) values($1,$2,'again')",[conv,a]));assert.equal((await summary()).super_messages,1);});
+ await t.test('unrelated regular conversation and client forged origins do not count',async()=>{const regular=(await as(c,()=>q('select * from find_or_create_conversation($1)',[b]))).rows[0].conversation_id;await as(c,()=>q("insert into messages(conversation_id,sender_id,content) values($1,$2,'normal')",[regular,c]));await as(c,()=>q('select open_boost_conversation($1)',[b]));assert.equal((await summary()).super_messages,1);await assert.rejects(as(c,()=>q('select * from boost_message_origins')));});
+ await t.test('expired boost creates normal chat without attribution',async()=>{await q('delete from conversations where id in(select conversation_id from conversation_participants where user_id=$1)',[c]);await q("update profiles set highlighted_until=now()-interval '1 minute' where id=$1",[b]);const id=(await as(c,()=>q('select open_boost_conversation($1) id',[b]))).rows[0].id;await as(c,()=>q("insert into messages(conversation_id,sender_id,content) values($1,$2,'expired')",[id,c]));assert.equal((await summary()).super_messages,1);});
+ await t.test('story likes survive story removal and cannot inflate through unlike/re-like or self-like',async()=>{const id=(await as(b,()=>q("insert into stories(user_id,media_url) values($1,'https://example.invalid/story.jpg') returning id",[b]))).rows[0].id;await as(a,()=>q('insert into story_likes(story_id,user_id) values($1,$2)',[id,a]));await as(a,()=>q('delete from story_likes where story_id=$1 and user_id=$2',[id,a]));await as(a,()=>q('insert into story_likes(story_id,user_id) values($1,$2)',[id,a]));await as(b,()=>q('insert into story_likes(story_id,user_id) values($1,$2)',[id,b]));assert.equal((await summary()).likes,1);await as(b,()=>q('delete from stories where id=$1',[id]));assert.equal((await summary()).likes,1);await assert.rejects(as(a,()=>q('delete from story_like_history')));assert.equal((await summary()).following,undefined);});
+});
+
 test('reviewable deployment bundle applies atomically and rejects accidental replay',async t=>{
  const db=await setup();t.after(()=>db.close());const sql=fs.readFileSync(path.join(__dirname,'../supabase/patches/real-user-report.sql'),'utf8');
  await db.exec(sql);assert.equal((await db.query('select count(*)::int n from public.napan_patch_history')).rows[0].n,1);
  await assert.rejects(db.exec(sql),/already applied/);await db.exec('rollback');
  assert.equal((await db.query('select count(*)::int n from public.napan_patch_history')).rows[0].n,1);
+});
+
+test('server voice allocation and confirmed quota',async t=>{
+ const db=await setup();t.after(()=>db.close());
+ await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/patches/real-user-report.sql'),'utf8'));
+ const patch=fs.readFileSync(path.join(__dirname,'../supabase/patches/design-and-calls.sql'),'utf8');await db.exec(patch);
+ const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222',c='33333333-3333-4333-8333-333333333333';
+ const q=(sql,p=[])=>db.query(sql,p);
+ for(const [id,name] of [[a,'alice'],[b,'bob'],[c,'carol']])await q('insert into auth.users(id,raw_user_meta_data) values($1,$2)',[id,JSON.stringify({username:name})]);
+ async function as(id,fn){await q("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claim.role','authenticated',false)",[id]);await db.exec('set role authenticated');try{return await fn();}finally{await db.exec('reset role');}}
+ const join=async id=>(await as(id,()=>q('select join_voice_match() result'))).rows[0].result;
+ let session;
+ await t.test('two peers receive one shared room and a third cannot steal either peer',async()=>{assert.equal((await join(a)).status,'waiting');const pair=await join(b);session=pair.sessionId;assert.equal(pair.status,'matched');const other=await join(a);assert.equal(other.sessionId,session);assert.equal(other.room,pair.room);assert.notEqual(other.caller,pair.caller);assert.equal((await join(c)).status,'waiting');});
+ await t.test('unallocated user cannot confirm a forged match; only bilateral real confirmation charges quota once',async()=>{await assert.rejects(as(c,()=>q('select confirm_match($1,$2)',[a,session])));assert.equal((await as(a,()=>q('select confirm_match($1,$2) ok',[b,session]))).rows[0].ok,false);assert.equal((await q('select matches_used from daily_matches where user_id=$1',[a])).rows[0].matches_used,0);assert.equal((await as(b,()=>q('select confirm_match($1,$2) ok',[a,session]))).rows[0].ok,true);await as(a,()=>q('select confirm_match($1,$2)',[b,session]));assert.equal((await q('select matches_used from daily_matches where user_id=$1',[a])).rows[0].matches_used,1);await assert.rejects(as(c,()=>q('select * from voice_match_queue')));});
+ await t.test('only participant cancellation is effective and stale queue entries are not matched',async()=>{await as(c,()=>q('select leave_voice_match($1)',[session]));assert.equal((await q('select cancelled from voice_match_sessions where id=$1',[session])).rows[0].cancelled,false);await as(a,()=>q('select leave_voice_match($1)',[session]));assert.equal((await q('select cancelled from voice_match_sessions where id=$1',[session])).rows[0].cancelled,true);await q('delete from voice_match_queue');await join(a);await q("update voice_match_queue set touched_at=now()-interval '1 minute' where user_id=$1",[a]);assert.equal((await join(b)).status,'waiting');});
+ await t.test('mutual blocking, private search and unauthorized gender filters are enforced on server',async()=>{await q('delete from voice_match_queue');await q('insert into blocks(blocker_id,blocked_id) values($1,$2)',[a,b]);await join(a);assert.equal((await join(b)).status,'waiting');await assert.rejects(as(a,()=>q("select join_voice_match('female')")));await q('delete from voice_match_queue');await q('delete from blocks');await join(a);await q('update profiles set privacy_show_in_searches=false where id=$1',[a]);assert.equal((await join(b)).status,'waiting');await q('delete from voice_match_queue');await join(b);await q('update daily_matches set last_match_date=current_date,matches_used=100 where user_id=$1',[b]);assert.equal((await join(c)).status,'waiting');});
+ await t.test('design deployment bundle rejects replay without partial changes',async()=>{await assert.rejects(db.exec(patch),/already applied/);await db.exec('rollback');assert.equal((await q("select count(*)::int n from napan_patch_history where name='design-and-calls-v2'")).rows[0].n,1);});
 });

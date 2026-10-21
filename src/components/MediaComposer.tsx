@@ -7,7 +7,7 @@ import { requestId } from '../lib/requestId';
 import { getAssetExtension } from '../lib/media';
 import { uploadFile } from '../lib/storage';
 
-function ComposerButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled: boolean }) { return <TouchableOpacity disabled={disabled} onPress={onPress} style={{ padding: 14, backgroundColor: '#27324b', borderRadius: 12, opacity: disabled ? 0.5 : 1 }}><Text style={{ color: '#fff' }}>{label}</Text></TouchableOpacity>; }
+function ComposerButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled: boolean }) { return <TouchableOpacity disabled={disabled} onPress={onPress} style={{ padding: 14, backgroundColor: '#23304A', borderRadius: 12, opacity: disabled ? 0.5 : 1 }}><Text style={{ color: '#fff' }}>{label}</Text></TouchableOpacity>; }
 
 export default function MediaComposer({ conversationId, storyId, onClose, onSent }: {
   conversationId: string; storyId?: string; onClose: () => void; onSent: () => void;
@@ -51,7 +51,7 @@ export default function MediaComposer({ conversationId, storyId, onClose, onSent
       if (!item.uploaded) console.warn('Media upload did not complete.');
     } finally { lock.current = false; setBusy(false); }
   };
-  return <Modal transparent animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}><View style={{ flex: 1, justifyContent: 'center', backgroundColor: '#000b', padding: 24 }}><View style={{ padding: 20, backgroundColor: '#131c2e', borderRadius: 20, gap: 12 }}>
+  return <Modal transparent animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}><View style={{ flex: 1, justifyContent: 'center', backgroundColor: '#000b', padding: 24 }}><View style={{ padding: 20, backgroundColor: '#172237', borderRadius: 20, gap: 12 }}>
     <Text style={{ color: '#fff', fontSize: 20 }}>Fotoğraf veya video gönder</Text>
     <ComposerButton label="Galeriden seç" disabled={busy || attempted} onPress={() => { void pick('gallery'); }} />
     <ComposerButton label="Kamera · fotoğraf" disabled={busy || attempted} onPress={() => { void pick('camera'); }} />

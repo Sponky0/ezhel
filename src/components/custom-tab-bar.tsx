@@ -8,7 +8,6 @@ import {
   Platform,
 } from 'react-native';
 import { useColorScheme } from '../hooks/use-color-scheme';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
@@ -28,7 +27,7 @@ interface CustomTabBarProps {
 // Sekme çubuğundaki görsel sıra. Navigatördeki bildirim sırasından bağımsızdır;
 // böylece başlangıç sekmesi (index) navigatörde ilk olsa da çubukta istenen
 // konumda görünür.
-const TAB_ORDER = ['stories', 'chat', 'index', 'explore', 'profile'];
+const TAB_ORDER = ['index', 'chat', 'explore', 'stories', 'profile'];
 
 
 interface CustomTabItemProps {
@@ -72,7 +71,8 @@ function CustomTabItem({
       onLongPress={onLongPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={styles.tabItem}
+      accessibilityRole="tab" accessibilityState={{ selected: isFocused }} accessibilityLabel={label}
+      style={[styles.tabItem, { backgroundColor: isFocused ? colors.primarySoft : 'transparent', borderRadius: 14 }]}
     >
       <Animated.View style={[styles.tabItemContent, animatedStyle]}>
         <View style={styles.iconContainer}>
@@ -126,7 +126,7 @@ export default function CustomTabBar({
 
   // Outer container background for android/web when blur isn't fully transparent
   const blurBgColor = isDark
-    ? 'rgba(12, 16, 20, 0.85)'
+    ? '#172237'
     : 'rgba(255, 255, 255, 0.82)';
 
   const barBorderColor = isDark
@@ -144,9 +144,7 @@ export default function CustomTabBar({
           },
         ]}
       >
-        <BlurView
-          intensity={85}
-          tint={isDark ? 'dark' : 'light'}
+        <View
           style={[
             styles.blurView,
             {
@@ -221,7 +219,7 @@ export default function CustomTabBar({
               );
             })}
           </View>
-        </BlurView>
+        </View>
       </View>
     </View>
   );
@@ -238,28 +236,28 @@ const styles = StyleSheet.create({
     zIndex: 99,
   },
   shadowContainer: {
-    width: '92%',
-    maxWidth: 440,
-    borderRadius: 35,
+    width: '94%',
+    maxWidth: 540,
+    borderRadius: 22,
     ...Platform.select({
       ios: {
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.12,
+        shadowOpacity: 0.04,
         shadowRadius: 18,
       },
       android: {
-        elevation: 8,
+        elevation: 2,
       },
       web: {
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.04,
         shadowRadius: 16,
       },
     }),
   },
   blurView: {
-    height: 64,
-    borderRadius: 35,
+    height: 70,
+    borderRadius: 22,
     overflow: 'hidden',
     borderWidth: 1,
     paddingHorizontal: 8,
@@ -315,7 +313,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyMedium,
   },
   labelText: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
     fontFamily: Fonts.bodyMedium,
   },

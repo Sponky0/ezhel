@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Colors, Fonts } from '../constants/theme';
+import { useColorScheme } from '../hooks/use-color-scheme';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ActionModal } from './ActionModal';
 
-type Summary = { followers: number; following: number; likes: number; is_following: boolean; has_instagram: boolean; instagram_cost: number };
+type Summary = { followers: number; super_messages: number; likes: number; is_following: boolean; has_instagram: boolean; instagram_cost: number };
 export function SocialPanel({ userId }: { userId: string }) {
   const { user, refreshProfile } = useAuth();
   const router = useRouter();
+  const colors = Colors[useColorScheme()];
   const [summary, setSummary] = useState<Summary | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('social_summary', { p_user_id: userId });
     if (!error) setSummary(data);
   }, [userId]);
-  useEffect(() => { const timer = setTimeout(() => { void load(); }, 0); return () => clearTimeout(timer); }, [load]);
+  useFocusEffect(useCallback(() => { const timer = setTimeout(() => { void load(); }, 0); return () => clearTimeout(timer); }, [load]));
   if (!user || !summary) return null;
   const follow = async () => {
     if (busy) return; setBusy(true);
@@ -41,16 +44,16 @@ export function SocialPanel({ userId }: { userId: string }) {
       finally { setBusy(false); }
     } }],
   });
-  return <View style={{ padding: 12, gap: 12, backgroundColor: '#182032', borderRadius: 16, margin: 12 }}>
+  return <View style={{ width: '100%', padding: 16, gap: 12, backgroundColor: colors.backgroundElement, borderRadius: 18, borderWidth: 1, borderColor: colors.border, marginVertical: 16 }}>
     <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-      {(['followers', 'following', 'likes'] as const).map((key, i) => <TouchableOpacity key={key} disabled={key === 'likes'}
+      {(['followers', 'super_messages', 'likes'] as const).map((key, i) => <TouchableOpacity key={key} disabled={key !== 'followers'}
         onPress={() => router.push({ pathname: '/social', params: { id: userId, list: key } })}>
-        <Text style={{ color: '#fff', textAlign: 'center', fontWeight: '700' }}>{summary[key]}</Text>
-        <Text style={{ color: '#b9c5dd' }}>{['Takipçi', 'Takip', 'Beğeni'][i]}</Text>
+        <Text style={{ color: colors.text, textAlign: 'center', fontFamily: Fonts.heading, fontSize: 23, marginBottom: 5 }}>{summary[key]}</Text>
+        <Text style={{ color: colors.textSecondary, fontFamily: Fonts.body, fontSize: 12 }}>{['Takipçiler', 'Süper mesaj', 'Beğeni'][i]}</Text>
       </TouchableOpacity>)}
     </View>
-    {user.id !== userId && <TouchableOpacity disabled={busy} onPress={follow}><Text style={{ color: '#b49cff', textAlign: 'center' }}>{summary.is_following ? 'Takibi bırak' : 'Takip et'}</Text></TouchableOpacity>}
-    {summary.has_instagram && <TouchableOpacity disabled={busy} onPress={instagram}><Text style={{ color: '#ff9dd2', textAlign: 'center' }}>Instagram hesabını görüntüle</Text></TouchableOpacity>}
+    {user.id !== userId && <TouchableOpacity disabled={busy} onPress={follow}><Text style={{ color: colors.primary, textAlign: 'center', fontFamily: Fonts.bodyMedium, padding: 12 }}>{summary.is_following ? 'Takibi bırak' : 'Takip et'}</Text></TouchableOpacity>}
+    {summary.has_instagram && <TouchableOpacity disabled={busy} onPress={instagram}><Text style={{ color: colors.accent, textAlign: 'center', fontFamily: Fonts.bodyMedium, padding: 12 }}>Instagram hesabını görüntüle</Text></TouchableOpacity>}
     {busy && <ActivityIndicator />}
   </View>;
 }
@@ -74,9 +77,9 @@ export function InstagramEditor() {
     } catch (error: any) { ActionModal.show({ title: 'Kaydedilemedi', message: error.message }); }
     finally { setSaving(false); }
   };
-  return <View style={{ gap: 12, padding: 16, backgroundColor: '#182032', borderRadius: 16, marginVertical: 12 }}><Text style={{ color: '#fff' }}>Instagram hesabı (isteğe bağlı)</Text>
+  return <View style={{ gap: 12, padding: 16, backgroundColor: '#172237', borderRadius: 16, marginVertical: 12 }}><Text style={{ color: '#fff' }}>Instagram hesabı (isteğe bağlı)</Text>
     <Text style={{ color: '#aab5cc' }}>Kaydederek hesabınıza ücretli erişim sunmayı kabul edersiniz. İstediğiniz zaman boş bırakıp kaldırabilirsiniz.</Text>
-    <TextInput accessibilityLabel="Instagram kullanıcı adı" autoCapitalize="none" value={handle} onChangeText={setHandle} placeholder="kullanici_adi" placeholderTextColor="#888" style={{ backgroundColor: '#25304a', color: '#fff', padding: 14, borderRadius: 12 }} />
-    <TouchableOpacity disabled={saving} onPress={save}><Text style={{ color: '#b49cff' }}>{saving ? 'Kaydediliyor…' : 'Instagram hesabını kaydet / kaldır'}</Text></TouchableOpacity>
+    <TextInput accessibilityLabel="Instagram kullanıcı adı" autoCapitalize="none" value={handle} onChangeText={setHandle} placeholder="kullanici_adi" placeholderTextColor="#888" style={{ backgroundColor: '#23304A', color: '#fff', padding: 14, borderRadius: 12 }} />
+    <TouchableOpacity disabled={saving} onPress={save}><Text style={{ color: '#BCADDC' }}>{saving ? 'Kaydediliyor…' : 'Instagram hesabını kaydet / kaldır'}</Text></TouchableOpacity>
   </View>;
 }

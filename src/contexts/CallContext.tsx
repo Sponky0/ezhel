@@ -1,6 +1,9 @@
+import { createCallSignaling } from '../lib/callSignaling';
+import { withTimeout } from '../lib/async';
+import { ActionModal } from '../components/ActionModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createRemoteIceQueue, isPeerConnected } from '../lib/callConnection';
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { isPeerConnected } from '../lib/callConnection';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -9,6 +12,7 @@ import { findOrCreateConversation } from '../lib/conversations';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/theme';
 import { useColorScheme } from '../hooks/use-color-scheme';
+import { requestId } from '../lib/requestId';
 import { getIceServers } from '../lib/turn';
 
 // Conditional WebRTC imports
@@ -59,6 +63,7 @@ interface IncomingCall {
 }
 
 interface CallContextType {
+  callError: string | null;
   activeCallId: string | null;
   callStatus: "idle" | "initializing" | "ringing" | "connecting" | "connected" | "disconnected" | "rejected" | "no_answer" | "busy";
   timeLeft: number;
@@ -89,7 +94,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
 
-  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [incomingCall, setIncomingCallState] = useState<IncomingCall | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [callStatus, setCallStatus] = useState<
     "idle" | "initializing" | "ringing" | "connecting" | "connected" | "disconnected" | "rejected" | "no_answer" | "busy"
@@ -97,6 +102,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+  const [callError, setCallError] = useState<string | null>(null);
+  const callEpochRef = useRef(0);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasLiked, setHasLiked] = useState(false);
   const [peerLiked, setPeerLiked] = useState(false);
 
@@ -113,8 +121,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const ringTimeoutRef = useRef<any>(null);
 
   const userChannelRef = useRef<any>(null);
+  const activeRoomRef = useRef<string | null>(null);
   const incomingCallRef = useRef<IncomingCall | null>(null);
   const activeCallIdRef = useRef<string | null>(null);
+
+  const setIncomingCall = useCallback((call: IncomingCall | null) => {
+    if (call && (activeCallIdRef.current || incomingCallRef.current?.roomName === call.roomName)) return;
+    incomingCallRef.current = call; setIncomingCallState(call);
+  }, []);
 
   useEffect(() => {
     incomingCallRef.current = incomingCall;
@@ -144,6 +158,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     channel
       .on('broadcast', { event: 'call_incoming' }, (payload: any) => {
+        if (activeRoomRef.current === payload.payload?.roomName || incomingCallRef.current?.roomName === payload.payload?.roomName) return;
         // If already in a call, broadcast busy/rejected
         if (activeCallIdRef.current || incomingCallRef.current) {
           const sigChannel = supabase.channel(payload.payload.roomName);
@@ -183,7 +198,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         userChannelRef.current = null;
       }
     };
-  }, [user?.id]);
+  }, [user?.id, setIncomingCall]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -212,18 +227,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const setupWebRTC = async () => {
+  const setupWebRTC = async (epoch: number) => {
     try {
       await startVoiceAudio('direct');
 
-      const stream = await mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
+      const stream = await withTimeout(Promise.resolve(mediaDevices.getUserMedia({ audio: true, video: false })).then((value: any) => {
+        if (epoch !== callEpochRef.current) { value.getTracks().forEach((t: any) => t.stop()); throw Error('Arama iptal edildi.'); }
+        return value;
+      }), 15000);
 
       localStreamRef.current = stream;
 
-      const iceServers = await getIceServers();
+      const iceServers = await withTimeout(getIceServers(), 10000);
+      if (epoch !== callEpochRef.current) throw Error('Arama iptal edildi.');
       const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
 
@@ -231,17 +247,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       stream.getTracks().forEach((track: any) => {
         pc.addTrack(track, stream);
       });
-
-      // Handle ICE Candidates
-      pc.onicecandidate = (event: any) => {
-        if (event.candidate && signalingChannelRef.current) {
-          signalingChannelRef.current.send({
-            type: "broadcast",
-            event: "candidate",
-            payload: event.candidate,
-          });
-        }
-      };
 
       // Handle Remote Stream Audio
       pc.ontrack = (event: any) => {
@@ -285,28 +290,36 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (!user || !profile) return;
 
     const sortedIds = [user.id, peerId].sort();
-    const generatedRoomName = customRoomName || `signaling:${sortedIds[0]}_${sortedIds[1]}`;
+    const generatedRoomName = customRoomName || `signaling:${sortedIds[0]}_${sortedIds[1]}:${requestId()}`;
+    const epoch = ++callEpochRef.current;
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    setCallError(null);
+    activeRoomRef.current = generatedRoomName;
     setRoomName(generatedRoomName);
 
     try {
-      const pc = await setupWebRTC();
-      const channel = supabase.channel(generatedRoomName);
+      const pc = await setupWebRTC(epoch);
+      const channel = supabase.channel(generatedRoomName, { config: { broadcast: { ack: true } } });
       signalingChannelRef.current = channel;
-      const remoteIce = createRemoteIceQueue(async candidate => {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      const negotiation = createCallSignaling({
+        pc, channel, caller: callerMode,
+        description: data => new RTCSessionDescription(data), candidate: data => new RTCIceCandidate(data),
+        onConnecting: () => { if (connected) return; if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current); setCallStatus("connecting"); },
+        onError: error => { failCall(error.message); },
+
       });
+
       let connected = false;
       const connectionTimeout = setTimeout(() => {
         if (pcRef.current !== pc || connected) return;
-        console.warn('WebRTC connection timed out before ICE connected');
-        setCallStatus("disconnected");
-        cleanupCall();
+        failCall('Ses bağlantısı kurulamadı. TURN erişimi veya ağ kısıtlaması olabilir; farklı ağla tekrar deneyin.');
       }, 45000);
       const observeConnection = () => {
         if (pcRef.current !== pc) return;
         if (isPeerConnected(pc.connectionState, pc.iceConnectionState)) {
           if (connected) return;
           connected = true;
+          negotiation.connected();
           clearTimeout(connectionTimeout);
           if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
           setCallStatus("connected");
@@ -322,54 +335,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const closeConnection = pc.close.bind(pc);
       pc.close = () => {
         clearTimeout(connectionTimeout);
-        remoteIce.close();
+        negotiation.close();
         pc.onconnectionstatechange = null;
         pc.oniceconnectionstatechange = null;
         closeConnection();
       };
 
       channel
-        .on("broadcast", { event: "join" }, async () => {
-          if (callerMode && pc) {
-            if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
-            setCallStatus("connecting");
-            // Caller initiates offer
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            channel.send({
-              type: "broadcast",
-              event: "offer",
-              payload: offer,
-            });
-          }
-        })
-        .on("broadcast", { event: "offer" }, async ({ payload }: any) => {
-          if (!callerMode && pc) {
-            setCallStatus("connecting");
-            await pc.setRemoteDescription(new RTCSessionDescription(payload));
-            await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-
-            channel.send({
-              type: "broadcast",
-              event: "answer",
-              payload: answer,
-            });
-          }
-        })
-        .on("broadcast", { event: "answer" }, async ({ payload }: any) => {
-          if (callerMode && pc) {
-            await pc.setRemoteDescription(new RTCSessionDescription(payload));
-            await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
-
-          }
-        })
-        .on("broadcast", { event: "candidate" }, async ({ payload }: any) => {
-          if (pc) {
-            await remoteIce.add(payload).catch(error => console.warn('ICE candidate rejected:', error));
-          }
-        })
         .on("broadcast", { event: "call_rejected" }, ({ payload }: any) => {
           if (payload?.reason === "busy") {
             setCallStatus("busy");
@@ -387,9 +359,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           setPeerLiked(true);
         });
 
-      await channel.subscribe(async (subStatus: any) => {
+      let invited = false;
+      channel.subscribe((subStatus: any) => {
         if (subStatus === "SUBSCRIBED") {
-          if (callerMode) {
+          negotiation.subscribed();
+          if (callerMode && !invited) {
+            invited = true;
             setCallStatus("ringing");
 
             // Broadcast incoming call to peer
@@ -421,23 +396,20 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
               sendPeerCallEvent(peerId, "call_cancelled", { callerId: user.id });
               cleanupCall();
             }, 30000);
-          } else {
-            // Recipient sends join event
-            channel.send({
-              type: "broadcast",
-              event: "join",
-            });
           }
+        } else if (subStatus === 'CHANNEL_ERROR' || subStatus === 'TIMED_OUT') {
+          negotiation.disconnected(); failCall('Arama sinyal sunucusuna bağlanılamadı. Bağlantınızı kontrol edip tekrar deneyin.');
         }
       });
     } catch (err) {
-      console.error("Failed to setup WebRTC signaling in CallContext:", err);
-      setCallStatus("disconnected");
-      cleanupCall();
+      if (epoch !== callEpochRef.current) return;
+      failCall(err instanceof Error ? err.message : "Arama kurulamadı.");
     }
   };
 
   const cleanupCall = () => {
+    const epoch = ++callEpochRef.current;
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     // Clear timers
     if (timerRef.current) clearInterval(timerRef.current);
     if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
@@ -476,14 +448,22 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Delay resetting status/activeId to allow screen to show end state
-    setTimeout(() => {
+    resetTimerRef.current = setTimeout(() => {
+      if (callEpochRef.current !== epoch) return;
+      activeCallIdRef.current = null;
       setActiveCallId(null);
       setCallStatus("idle");
       setPeerName(null);
       setPeerAvatar(null);
       setIsCaller(false);
+      activeRoomRef.current = null;
       setRoomName(null);
     }, 2000);
+  };
+
+  const failCall = (message: string) => {
+    setCallError(message); setCallStatus('disconnected');
+    ActionModal.show({ title: 'Arama kurulamadı', message }); cleanupCall();
   };
 
   const endCall = () => {
@@ -557,6 +537,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const call = incomingCallRef.current;
     incomingCallRef.current = null;
     setIncomingCall(null);
+    activeCallIdRef.current = call.callerId;
     setActiveCallId(call.callerId);
     setPeerName(call.callerName);
     setPeerAvatar(call.callerAvatar);
@@ -620,6 +601,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   return (
     <CallContext.Provider value={{
       activeCallId,
+      callError,
       callStatus,
       timeLeft,
       isMuted,

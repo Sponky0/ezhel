@@ -205,7 +205,7 @@ export default function OnboardingModal({ visible, onClose }: OnboardingModalPro
 
           {/* Action Buttons */}
           <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: colors.primary }]}
+            style={[styles.saveButton, { backgroundColor: colors.action }]}
             onPress={handleSave}
             disabled={loading}
           >

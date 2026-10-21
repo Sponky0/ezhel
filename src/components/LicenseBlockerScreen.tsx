@@ -100,7 +100,7 @@ export default function LicenseBlockerScreen({ errorType, onRetry, retrying = fa
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0C1014',
+    backgroundColor: '#0D1728',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -108,10 +108,10 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: '#121620',
+    backgroundColor: '#172237',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#1C212E',
+    borderColor: '#23304A',
     padding: 32,
     alignItems: 'center',
     shadowColor: '#000000',

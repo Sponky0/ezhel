@@ -1,3 +1,4 @@
+import { Brand } from './Brand';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
@@ -76,7 +77,7 @@ function DropdownSelect({
         style={[
           styles.pillInput,
           {
-            backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+            backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
             borderColor: modalVisible
               ? colors.primary
               : scheme === "dark"
@@ -121,7 +122,7 @@ function DropdownSelect({
             style={[
               styles.modalContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 borderColor: colors.border,
               },
             ]}
@@ -554,42 +555,12 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
               {/* --- 1. LANDING SCREEN (IMAGE 1 STYLE) --- */}
               {viewState === "landing" && (
                 <View style={styles.landingWrapper}>
-                  {/* Mascot Badge Circular Container */}
-                  <View
-                    style={[
-                      styles.mascotCircle,
-                      {
-                        backgroundColor:
-                          scheme === "dark" ? "#1E2D33" : "#D2F1F2",
-                      },
-                    ]}
-                  >
-                    <View style={styles.mascotInner}>
-                      {/* White Chat Bubble with Pink Heart */}
-                      <View style={styles.mascotBubble}>
-                        <Ionicons name="heart" size={24} color="#FF5A79" />
-                        <View style={styles.mascotBubbleTail} />
-                      </View>
-                      {/* Purple mascot hand pointing to the heart bubble */}
-                      <View style={styles.mascotHand}>
-                        <Ionicons name="hand-right" size={46} color="#7C3AED" />
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Brand Section */}
-                  <View style={styles.brandSection}>
-                    <Text style={[styles.brandName, { color: colors.text }]}>
-                      Napan
-                    </Text>
-                    <Text
-                      style={[
-                        styles.brandSubtitle,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      Make new friends
-                    </Text>
+                  <View style={{ alignSelf: 'flex-start', marginBottom: 32 }}><Brand /></View>
+                  <View style={{ gap: 16, marginBottom: 40 }}>
+                    <Text style={{ color: colors.text, fontFamily: Fonts.heading, fontSize: 38, letterSpacing: -1.2, lineHeight: 45 }}>İyi bir sohbet,
+bir merhaba ile.</Text>
+                    <Text style={{ color: colors.textSecondary, fontFamily: Fonts.body, fontSize: 16, lineHeight: 25 }}>Yeni insanlarla tanış. Hikâyeni paylaş.
+Sohbetin nereye gideceğini birlikte keşfet.</Text>
                   </View>
 
                   {/* Action Buttons */}
@@ -600,7 +571,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                         styles.socialButton,
                         {
                           backgroundColor:
-                            scheme === "dark" ? "#121620" : "#FFFFFF",
+                            scheme === "dark" ? "#172237" : "#FFFFFF",
                           borderWidth: 1,
                           borderColor: colors.border,
                         },
@@ -781,7 +752,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                         styles.pillInput,
                         {
                           color: colors.text,
-                          backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                          backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                           borderColor: focusedInput === "login_username"
                             ? colors.primary
                             : scheme === "dark"
@@ -816,7 +787,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                         styles.pillInput,
                         {
                           color: colors.text,
-                          backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                          backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                           borderColor: focusedInput === "login_password"
                             ? colors.primary
                             : scheme === "dark"
@@ -840,7 +811,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                     style={[
                       styles.primaryButton,
                       {
-                        backgroundColor: colors.primary,
+                        backgroundColor: colors.action,
                         shadowColor: colors.primary,
                         shadowOffset: { width: 0, height: 4 },
                         shadowOpacity: scheme === "dark" ? 0.35 : 0.2,
@@ -886,7 +857,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                                 step >= s
                                   ? colors.primary
                                   : scheme === "dark"
-                                    ? "#121620"
+                                    ? "#172237"
                                     : "#FFFFFF",
                               borderColor:
                                 step >= s
@@ -972,7 +943,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                             styles.pillInput,
                             {
                               color: colors.text,
-                              backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                              backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                               borderColor: focusedInput === "reg_email"
                                 ? colors.primary
                                 : scheme === "dark"
@@ -1007,7 +978,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                             styles.pillInput,
                             {
                               color: colors.text,
-                              backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                              backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                               borderColor: focusedInput === "reg_password"
                                 ? colors.primary
                                 : scheme === "dark"
@@ -1031,7 +1002,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                         style={[
                           styles.primaryButton,
                           {
-                            backgroundColor: colors.primary,
+                            backgroundColor: colors.action,
                             shadowColor: colors.primary,
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: scheme === "dark" ? 0.35 : 0.2,
@@ -1083,7 +1054,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                             styles.referencePillInput,
                             {
                               color: colors.text,
-                              backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                              backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                               borderColor: focusedInput === "reg_username"
                                 ? colors.primary
                                 : scheme === "dark"
@@ -1120,7 +1091,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                             styles.referencePillInput,
                             {
                               color: colors.text,
-                              backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                              backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                               borderColor: focusedInput === "reg_birthday"
                                 ? colors.primary
                                 : scheme === "dark"
@@ -1162,7 +1133,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                                 backgroundColor:
                                   regGender === "male"
                                     ? (scheme === "dark" ? colors.primary + "25" : colors.primary + "12")
-                                    : (scheme === "dark" ? "#121620" : "#FFFFFF"),
+                                    : (scheme === "dark" ? "#172237" : "#FFFFFF"),
                                 borderColor:
                                   regGender === "male"
                                     ? colors.primary
@@ -1206,7 +1177,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                                 backgroundColor:
                                   regGender === "female"
                                     ? (scheme === "dark" ? colors.primary + "25" : colors.primary + "12")
-                                    : (scheme === "dark" ? "#121620" : "#FFFFFF"),
+                                    : (scheme === "dark" ? "#172237" : "#FFFFFF"),
                                 borderColor:
                                   regGender === "female"
                                     ? colors.primary
@@ -1338,7 +1309,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                         style={[
                           styles.primaryButton,
                           {
-                            backgroundColor: colors.primary,
+                            backgroundColor: colors.action,
                             shadowColor: colors.primary,
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: scheme === "dark" ? 0.35 : 0.2,
@@ -1387,7 +1358,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                                 {
                                   backgroundColor: isSelected
                                     ? (scheme === "dark" ? colors.primary + "25" : colors.primary + "12")
-                                    : (scheme === "dark" ? "#121620" : "#FFFFFF"),
+                                    : (scheme === "dark" ? "#172237" : "#FFFFFF"),
                                   borderColor: isSelected
                                     ? colors.primary
                                     : (scheme === "dark" ? "#25292E" : "#E2E8F0"),
@@ -1436,7 +1407,7 @@ export default function LoginScreen({ onClose }: { onClose?: () => void }) {
                         style={[
                           styles.primaryButton,
                           {
-                            backgroundColor: colors.primary,
+                            backgroundColor: colors.action,
                             shadowColor: colors.primary,
                             shadowOffset: { width: 0, height: 4 },
                             shadowOpacity: scheme === "dark" ? 0.35 : 0.2,

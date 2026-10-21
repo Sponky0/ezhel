@@ -1,3 +1,4 @@
+import { Brand } from '../../components/Brand';
 import { ActionModal } from "@/components/ActionModal";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -303,17 +304,19 @@ export default function HomeScreen() {
     try {
       setFeedLoading(true);
 
-      const { conversationId } = await findOrCreateConversation(
-        user.id,
-        targetUser.id,
-      );
+      let conversationId: string;
+      if (targetUser.is_highlighted) {
+        const { data, error } = await supabase.rpc('open_boost_conversation', { p_user_id: targetUser.id });
+        if (error) throw error;
+        conversationId = data;
+      } else ({ conversationId } = await findOrCreateConversation(user.id, targetUser.id));
 
       router.push(`/chat-room?id=${conversationId}&name=${targetUser.username}`);
     } catch (err) {
       console.error("Start chat error:", err);
       ActionModal.show({
         title: "Hata",
-        message: "Sohbet başlatılamadı.",
+        message: err instanceof Error ? err.message : "Sohbet başlatılamadı.",
         type: "error",
       });
     } finally {
@@ -331,8 +334,8 @@ export default function HomeScreen() {
       ActionModal.show({
         title: (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#FFD700" }}>VIP Özelliği</Text>
-            <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
+            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#D5B075" }}>VIP Özelliği</Text>
+            <MaterialCommunityIcons name="crown" size={20} color="#D5B075" />
           </View>
         ),
         message: "Cinsiyete göre filtreleme yalnızca VIP üyelere özeldir.",
@@ -380,7 +383,7 @@ export default function HomeScreen() {
             </View>
           )}
           {item.is_highlighted && (
-            <View style={[styles.gridHighlightBadge, { backgroundColor: "#EAB308" }]}>
+            <View style={[styles.gridHighlightBadge, { backgroundColor: "#D5B075" }]}>
               <Ionicons name="star" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
               <Text style={styles.gridVipBadgeText}>Öne Çıkan</Text>
             </View>
@@ -398,8 +401,9 @@ export default function HomeScreen() {
             {item.username}
           </Text>
           <Text style={styles.gridCardBio} numberOfLines={1}>
-            {item.bio || "Sohbet etmek istiyor..."}
+            {item.bio || "Bir merhaba ile başla."}
           </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}><Text style={{ color: '#F08A80', fontSize: 12, fontFamily: Fonts.bodyMedium }}>Sohbet et</Text><Ionicons name="arrow-forward" color="#F08A80" size={14} /></View>
         </View>
       </TouchableOpacity>
     );
@@ -471,7 +475,7 @@ export default function HomeScreen() {
               style={[styles.listBioText, { color: colors.textSecondary }]}
               numberOfLines={1}
             >
-              {item.bio || "Sohbet etmek istiyor..."}
+              {item.bio || "Bir merhaba ile başla."}
             </Text>
           </View>
 
@@ -552,7 +556,7 @@ export default function HomeScreen() {
         </Text>
         <TouchableOpacity
           style={{
-            backgroundColor: colors.primary,
+            backgroundColor: colors.action,
             paddingVertical: Spacing.three,
             paddingHorizontal: Spacing.six,
             borderRadius: 25,
@@ -582,14 +586,7 @@ export default function HomeScreen() {
       {/* Messenger style Header for Keşfet */}
       <View style={styles.customHeader}>
         <View style={styles.headerTitleRow}>
-          <TouchableOpacity onPress={() => router.push("/profile" as any)}>
-            <ExpoImage
-              source={profile?.avatar_url ? { uri: profile.avatar_url } : require("../../../assets/images/place-holder.png")}
-              style={styles.headerUserAvatar}
-              contentFit="cover"
-            />
-          </TouchableOpacity>
-          <Text style={[styles.headerTextTitle, { color: colors.text }]}>Keşfet</Text>
+          <Brand />
           <View style={styles.headerRightActions}>
             <View style={[styles.onlineIndicatorBadge, { backgroundColor: colors.online + "20" }]}>
               <View style={[styles.onlineBadgeDot, { backgroundColor: colors.online }]} />
@@ -600,9 +597,11 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <Text style={{ color: colors.text, fontFamily: Fonts.heading, fontSize: 28, letterSpacing: -0.7, marginBottom: 5 }}>Bir merhaba yeter.</Text>
+        <Text style={{ color: colors.textSecondary, fontFamily: Fonts.body, lineHeight: 21, marginBottom: 18 }}>Yeni insanlar, kendiliğinden başlayan sohbetler.</Text>
         {/* Search Bar */}
         <View style={styles.searchBarContainer}>
-          <View style={[styles.searchBarInputRow, { backgroundColor: isDark ? "#1C212E" : "#F2F4F7" }]}>
+          <View style={[styles.searchBarInputRow, { backgroundColor: isDark ? "#23304A" : "#EFE7E0" }]}>
             <Ionicons name="search" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
             <TextInput
               style={[styles.searchTextInput, { color: colors.text }]}
@@ -628,7 +627,7 @@ export default function HomeScreen() {
               styles.viewModeOption,
               viewMode === "grid" && [
                 styles.viewModeOptionActive,
-                { backgroundColor: isDark ? "#0C1014" : "#FFFFFF" }
+                { backgroundColor: isDark ? "#0D1728" : "#FFFFFF" }
               ],
             ]}
             onPress={() => handleSetViewMode("grid")}
@@ -645,7 +644,7 @@ export default function HomeScreen() {
                 { color: viewMode === "grid" ? colors.text : colors.textSecondary },
               ]}
             >
-              Grid
+              Kartlar
             </Text>
           </TouchableOpacity>
           
@@ -654,7 +653,7 @@ export default function HomeScreen() {
               styles.viewModeOption,
               viewMode === "list" && [
                 styles.viewModeOptionActive,
-                { backgroundColor: isDark ? "#0C1014" : "#FFFFFF" }
+                { backgroundColor: isDark ? "#0D1728" : "#FFFFFF" }
               ],
             ]}
             onPress={() => handleSetViewMode("list")}
@@ -704,7 +703,7 @@ export default function HomeScreen() {
             <View style={styles.filterBarWrapper}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
                 {filterItems.map((item) => {
-                  const activeBg = item.isActive ? item.activeColor : (isDark ? "#1C212E" : "#E2E8F0");
+                  const activeBg = item.isActive ? item.activeColor : (isDark ? "#23304A" : "#E2E8F0");
                   const activeText = item.isActive ? "#FFFFFF" : colors.text;
                   return (
                     <TouchableOpacity
@@ -733,7 +732,7 @@ export default function HomeScreen() {
 
             {/* VIP Promoted Boost Banner (Orange/Gold Card) */}
             <TouchableOpacity
-              style={styles.boostBanner}
+              style={[styles.boostBanner, { backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.border }]}
               onPress={() => {
                 if (!user) {
                   showLoginModal();
@@ -742,15 +741,15 @@ export default function HomeScreen() {
                 }
               }}
             >
-              <View style={styles.boostRocketCircle}>
-                <Ionicons name="flash" size={20} color="#ff7c01ff" />
+              <View style={[styles.boostRocketCircle, { backgroundColor: colors.backgroundElement }]}>
+                <Ionicons name="flash" size={20} color={colors.primary} />
               </View>
               <View style={styles.boostTextContent}>
-                <Text style={styles.boostTitle}>
-                  Hep yukarıda görünmek ister misin?
+                <Text style={[styles.boostTitle, { color: colors.text }]}>
+                  Sohbetine yer aç.
                 </Text>
-                <Text style={styles.boostDesc}>
-                  {"Boost'la Keşfet'te öne çık, daha çok mesaj al!"}
+                <Text style={[styles.boostDesc, { color: colors.textSecondary }]}>
+                  {"Profilini 24 saat boyunca öne çıkar."}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -804,8 +803,8 @@ const styles = StyleSheet.create({
   },
   headerUserAvatar: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
+    height: 48,
+    borderRadius: 14,
   },
   headerTextTitle: {
     fontSize: 30,
@@ -842,8 +841,8 @@ const styles = StyleSheet.create({
   searchBarInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    height: 40,
-    borderRadius: 20,
+    height: 48,
+    borderRadius: 14,
     paddingHorizontal: Spacing.three,
   },
   searchTextInput: {
@@ -921,8 +920,8 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     width: "48%",
-    height: 200,
-    borderRadius: 16,
+    height: 260,
+    borderRadius: 20,
     overflow: "hidden",
     position: "relative",
   },
@@ -971,7 +970,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    backgroundColor: "rgba(13, 23, 40, 0.92)",
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.two,
   },
@@ -1210,7 +1209,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    backgroundColor: "rgba(13, 23, 40, 0.92)",
   },
   navButtonLeft: {
     left: Spacing.two,

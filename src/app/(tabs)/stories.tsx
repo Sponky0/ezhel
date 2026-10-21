@@ -1,3 +1,4 @@
+import { useCall } from '../../contexts/CallContext';
 import MediaComposer from '../../components/MediaComposer';
 /* eslint-disable react-hooks/immutability */
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -156,7 +157,7 @@ const FloatingReaction = ({ content, left, onComplete }: { content: string; left
       pointerEvents="none"
     >
       {content === "heart" ? (
-        <Ionicons name="heart" size={36} color="#FF4D67" />
+        <Ionicons name="heart" size={36} color="#F08A80" />
       ) : (
         <Text style={{ fontSize: 30 }}>{content}</Text>
       )}
@@ -166,6 +167,9 @@ const FloatingReaction = ({ content, left, onComplete }: { content: string; left
 
 export default function StoriesScreen() {
   const { user } = useAuth();
+  const { callStatus } = useCall();
+  const [screenActive, setScreenActive] = useState(false);
+  useFocusEffect(useCallback(() => { setScreenActive(true); return () => setScreenActive(false); }, []));
   const router = useRouter();
   const scheme = useColorScheme();
   const colors = Colors[scheme === "dark" ? "dark" : "light"];
@@ -757,7 +761,7 @@ export default function StoriesScreen() {
               <StoryVideo
                 key={item.media_url}
                 videoUrl={item.media_url}
-                isActive={isActive}
+                isActive={isActive && screenActive && callStatus === "idle"}
                 style={StyleSheet.absoluteFill}
               />
             </AnimatedReanimated.View>
@@ -864,7 +868,7 @@ export default function StoriesScreen() {
                       <Ionicons
                         name={liked ? "heart" : "heart-outline"}
                         size={28}
-                        color={liked ? "#FF4D67" : "#FFFFFF"}
+                        color={liked ? "#F08A80" : "#FFFFFF"}
                       />
                     </Animated.View>
                     <Text style={styles.storyLikeCount}>
@@ -995,7 +999,7 @@ export default function StoriesScreen() {
               <TouchableOpacity
                 style={[
                   styles.shareButton,
-                  { backgroundColor: colors.primary, marginTop: 16 },
+                  { backgroundColor: colors.action, marginTop: 16 },
                 ]}
                 onPress={handleShareStory}
                 disabled={sharing}
@@ -1058,7 +1062,7 @@ export default function StoriesScreen() {
           </View>
         ) : (
           <View style={[styles.headerOverlay, { paddingTop: insets.top, height: HEADER_HEIGHT }]}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>Güncellemeler</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Hikâyeler</Text>
             <View style={styles.headerRight}>
               <TouchableOpacity
                 style={[styles.headerIconButton, { backgroundColor: colors.backgroundElement }]}
@@ -1101,7 +1105,7 @@ export default function StoriesScreen() {
               <TouchableOpacity
                 style={[
                   styles.emptyButton,
-                  { backgroundColor: colors.primary },
+                  { backgroundColor: colors.action },
                 ]}
                 onPress={handleRefresh}
                 disabled={refreshing}
@@ -1149,7 +1153,7 @@ export default function StoriesScreen() {
               <TouchableOpacity
                 style={[
                   styles.emptyButton,
-                  { backgroundColor: colors.primary },
+                  { backgroundColor: colors.action },
                 ]}
                 onPress={handleAddPress}
               >
@@ -1198,7 +1202,7 @@ export default function StoriesScreen() {
         </View>
       ) : (
         <View style={[styles.headerOverlay, { paddingTop: insets.top, height: HEADER_HEIGHT }]}>
-          <Text style={styles.headerTitle}>Güncellemeler</Text>
+          <Text style={styles.headerTitle}>Hikâyeler</Text>
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.headerIconButton}

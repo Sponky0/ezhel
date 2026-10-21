@@ -2,7 +2,6 @@ import ForegroundBanner from '../components/ForegroundBanner';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider, Stack, usePathname, useRouter } from 'expo-router';
 import { ActivityIndicator, View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { useFonts } from 'expo-font';
-import { Poppins_600SemiBold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
 import { Inter_400Regular, Inter_500Medium } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -208,7 +207,7 @@ function CongratsModalContent({ onClose }: { onClose: () => void }) {
         </Text>
 
         <TouchableOpacity
-          style={[styles.congratsButton, { backgroundColor: colors.primary }]}
+          style={[styles.congratsButton, { backgroundColor: colors.action }]}
           onPress={onClose}
           activeOpacity={0.8}
         >
@@ -236,8 +235,6 @@ function AppContentWithNavigationTheme() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Poppins_600SemiBold,
-    Poppins_800ExtraBold,
     Inter_400Regular,
     Inter_500Medium,
   });
@@ -269,13 +266,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0E1A',
+    backgroundColor: '#0D1728',
   },
   bannedContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0E1A',
+    backgroundColor: '#0D1728',
     padding: 20,
   },
   bannedText: {
@@ -296,7 +293,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0E1A',
+    backgroundColor: '#0D1728',
     padding: 30,
     gap: 15,
   },

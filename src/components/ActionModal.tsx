@@ -458,7 +458,7 @@ export const ActionModalProvider = forwardRef<ActionModalRef>(
               {/* Buttons */}
               <View style={styles.buttonContainer}>
                 <TouchableOpacity
-                  style={[styles.button, { backgroundColor: colors.primary }]}
+                  style={[styles.button, { backgroundColor: colors.action }]}
                   activeOpacity={0.8}
                   onPress={() => dismissPrompt(true)}
                 >

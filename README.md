@@ -1,3 +1,5 @@
+> Yeni tasarım, **Takipçiler · Süper mesaj · Beğeni** ve arama güncellemesi için [v2 uygulama kaydı](docs/TASARIM_VE_ARAMA_V2.md). Mevcut kurulumun üzerine yalnızca yeni0034–0035 geçişi ve TURN deploy gerekir; önceki paketi yeniden çalıştırmayın.
+
 > Güncel Napan değişiklikleri, yerel test sonuçları ve mevcut Supabase projesine uygulama sırası: [Kullanıcı raporu uygulama kaydı](docs/KULLANICI_RAPORU_UYGULAMA.md). Yeni özellikler için backend geçişi ve yeni APK gerekir.
 
 # 🎙️ Anonim Random Chat & Sesli Görüşme Uygulaması

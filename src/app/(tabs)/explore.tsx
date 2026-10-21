@@ -1,5 +1,6 @@
-import { requestId } from '../../lib/requestId';
-import { createRemoteIceQueue, isPeerConnected } from '../../lib/callConnection';
+import { createCallSignaling } from '../../lib/callSignaling';
+import { withTimeout } from '../../lib/async';
+import { isPeerConnected } from '../../lib/callConnection';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter, useNavigation } from "expo-router";
@@ -118,7 +119,7 @@ export default function VoiceMatchScreen() {
   const [timeLeft, setTimeLeft] = useState(180); // Default 3 mins
   const [callLimit, setCallLimit] = useState(180);
   const [matchesLeft, setMatchesLeft] = useState(5);
-  const [maxMatchesLimit, setMaxMatchesLimit] = useState(5);
+  const [, setMaxMatchesLimit] = useState(5);
 
   // Gender preference for matchmaking (VIP-only)
   const [genderPref, setGenderPref] = useState<"male" | "female" | null>(null);
@@ -138,6 +139,11 @@ export default function VoiceMatchScreen() {
   const signalingChannelRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
   const callLimitRef = useRef<number>(180);
+  const callEpochRef = useRef(0);
+  const leavePendingRef = useRef<PromiseLike<{ error?: string }>>(Promise.resolve({}));
+  const searchActiveRef = useRef(false);
+  const matchSessionRef = useRef<string | null>(null);
+  const matchPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusRef = useRef<string>("idle");
 
   useEffect(() => {
@@ -170,8 +176,8 @@ export default function VoiceMatchScreen() {
       ActionModal.show({
         title: (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#FFD700" }}>VIP Özelliği</Text>
-            <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
+            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#D5B075" }}>VIP Özelliği</Text>
+            <MaterialCommunityIcons name="crown" size={20} color="#D5B075" />
           </View>
         ),
         message: "Cinsiyet tercihiyle eşleşme yalnızca VIP üyelere özeldir.",
@@ -264,6 +270,10 @@ export default function VoiceMatchScreen() {
 
   // Cleanup WebRTC & Channels
   const cleanupCall = useCallback(() => {
+    callEpochRef.current++;
+    if (matchPollRef.current) clearTimeout(matchPollRef.current);
+    if (searchActiveRef.current || matchSessionRef.current) leavePendingRef.current = supabase.rpc('leave_voice_match', { p_session_id: matchSessionRef.current }).then(({ error }) => error ? { error: error.message } : {});
+    searchActiveRef.current = false; matchSessionRef.current = null;
     // Clear Timer
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -321,18 +331,19 @@ export default function VoiceMatchScreen() {
   };
 
   // Setup WebRTC and audio capturing
-  const setupWebRTC = async () => {
+  const setupWebRTC = async (epoch: number) => {
     try {
       await startVoiceAudio('random');
 
-      const stream = await mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
+      const stream = await withTimeout(Promise.resolve(mediaDevices.getUserMedia({ audio: true, video: false })).then((value: any) => {
+        if (epoch !== callEpochRef.current) { value.getTracks().forEach((t: any) => t.stop()); throw Error('Arama iptal edildi.'); }
+        return value;
+      }), 15000);
 
       localStreamRef.current = stream;
 
-      const iceServers = await getIceServers();
+      const iceServers = await withTimeout(getIceServers(), 10000);
+      if (epoch !== callEpochRef.current) throw Error('Arama iptal edildi.');
       const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
 
@@ -340,17 +351,6 @@ export default function VoiceMatchScreen() {
       stream.getTracks().forEach((track: any) => {
         pc.addTrack(track, stream);
       });
-
-      // Handle ICE Candidates
-      pc.onicecandidate = (event: any) => {
-        if (event.candidate && signalingChannelRef.current) {
-          signalingChannelRef.current.send({
-            type: "broadcast",
-            event: "candidate",
-            payload: event.candidate,
-          });
-        }
-      };
 
       // Handle Remote Stream Audio
       pc.ontrack = (event: any) => {
@@ -391,23 +391,29 @@ export default function VoiceMatchScreen() {
     myId: string,
     peerId: string,
     isCaller: boolean,
+    sessionId: string,
+    sessionRoom: string,
   ) => {
     setStatus("connecting");
-    const sortedIds = [myId, peerId].sort();
-    const roomName = `signaling:${sortedIds[0]}_${sortedIds[1]}`;
+    const roomName = sessionRoom;
 
-    let matchId = isCaller ? requestId() : null;
-    const pc = await setupWebRTC();
-    const channel = supabase.channel(roomName);
+    let matchId: string | null = sessionId;
+    const epoch = ++callEpochRef.current;
+    const pc = await setupWebRTC(epoch);
+    const channel = supabase.channel(roomName, { config: { broadcast: { ack: true } } });
     signalingChannelRef.current = channel;
-    const remoteIce = createRemoteIceQueue(async candidate => {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    });
+const negotiation = createCallSignaling({
+        pc, channel, caller: isCaller,
+        description: data => new RTCSessionDescription(data), candidate: data => new RTCIceCandidate(data),
+        onConnecting: () => { if (!connected) setStatus("connecting"); },
+        onError: error => { ActionModal.show({ title: "Arama kurulamadı", message: error.message }); cleanupCall(); },
+offerData: matchId ? { matchId } : {}, onOffer: payload => { matchId = payload.matchId || null; },
+      });
+
     let connected = false;
     const connectionTimeout = setTimeout(() => {
       if (pcRef.current !== pc || connected) return;
-      console.warn('WebRTC connection timed out before ICE connected');
-      console.warn("WebRTC disconnected before media was established");
+      ActionModal.show({ title: 'Ses bağlantısı kurulamadı', message: 'TURN erişimi veya ağ kısıtlaması olabilir. Farklı ağla tekrar deneyin.' });
       cleanupCall();
     }, 45000);
     const observeConnection = () => {
@@ -415,11 +421,12 @@ export default function VoiceMatchScreen() {
       if (isPeerConnected(pc.connectionState, pc.iceConnectionState)) {
         if (connected) return;
         connected = true;
+        negotiation.connected();
         clearTimeout(connectionTimeout);
         setStatus("connected");
         startCallTimer();
         if (matchId) void supabase.rpc('confirm_match', { p_peer_id: peerId, p_match_id: matchId }).then(({ error }) => {
-          if (error) console.warn('Match confirmation failed:', error.message);
+          if (error) console.warn('Match confirmation failed:', error.message); else void loadLimits();
         });
       } else if (pc.connectionState === 'failed' || pc.iceConnectionState === 'failed') {
         clearTimeout(connectionTimeout);
@@ -432,54 +439,13 @@ export default function VoiceMatchScreen() {
     const closeConnection = pc.close.bind(pc);
     pc.close = () => {
       clearTimeout(connectionTimeout);
-      remoteIce.close();
+      negotiation.close();
       pc.onconnectionstatechange = null;
       pc.oniceconnectionstatechange = null;
       closeConnection();
     };
 
     channel
-      .on("broadcast", { event: "join" }, async () => {
-        if (isCaller && pc) {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-
-          channel.send({
-            type: "broadcast",
-            event: "offer",
-            payload: { ...offer, matchId },
-          });
-        }
-      })
-      .on("broadcast", { event: "offer" }, async ({ payload }: any) => {
-        if (!isCaller && pc) {
-          matchId = payload.matchId || null;
-          await pc.setRemoteDescription(new RTCSessionDescription(payload));
-          await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-
-          channel.send({
-            type: "broadcast",
-            event: "answer",
-            payload: answer,
-          });
-
-
-        }
-      })
-      .on("broadcast", { event: "answer" }, async ({ payload }: any) => {
-        if (isCaller && pc) {
-          await pc.setRemoteDescription(new RTCSessionDescription(payload));
-          await remoteIce.remoteDescriptionSet().catch(error => console.warn('Queued ICE candidate rejected:', error));
-
-        }
-      })
-      .on("broadcast", { event: "candidate" }, async ({ payload }: any) => {
-        if (pc) {
-          await remoteIce.add(payload).catch(error => console.warn('ICE candidate rejected:', error));
-        }
-      })
       .on("broadcast", { event: "like" }, () => {
         setTheyLiked(true);
       })
@@ -495,62 +461,16 @@ export default function VoiceMatchScreen() {
         cleanupCall();
       });
 
-    await channel.subscribe(async (status: any) => {
-      if (status === "SUBSCRIBED") {
-        if (!isCaller) {
-          // Non-caller sends join event when subscribed
-          channel.send({
-            type: "broadcast",
-            event: "join",
-          });
-        }
+    channel.subscribe((channelStatus: string) => {
+      if (channelStatus === 'SUBSCRIBED') negotiation.subscribed();
+      else if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
+        negotiation.disconnected(); ActionModal.show({ title: 'Arama kurulamadı', message: 'Sinyal sunucusuna bağlanılamadı. Tekrar deneyin.' }); cleanupCall();
       }
     });
 
-    // Success Match Confirmation: Increment matched count if not VIP
-    if (profile && !profile.is_vip) {
-      const { data: currentMatches } = await supabase
-        .from("daily_matches")
-        .select("matches_used")
-        .eq("user_id", myId)
-        .single();
-
-      const count = (currentMatches?.matches_used || 0) + 1;
-      await supabase
-        .from("daily_matches")
-        .update({ matches_used: count })
-        .eq("user_id", myId);
-
-      setMatchesLeft(Math.max(0, maxMatchesLimit - count));
-    }
   };
 
-
-
-  // Fetch blocked users to exclude them from matching
-  const fetchBlockedUsers = async () => {
-    try {
-      const { data } = await supabase
-        .from("blocks")
-        .select("blocker_id, blocked_id");
-      
-      const blockedSet = new Set<string>();
-      if (data) {
-        data.forEach((b: any) => {
-          if (user) {
-            if (b.blocker_id === user.id) blockedSet.add(b.blocked_id);
-            if (b.blocked_id === user.id) blockedSet.add(b.blocker_id);
-          }
-        });
-      }
-      return blockedSet;
-    } catch (err) {
-      console.error("Error fetching blocked users:", err);
-      return new Set<string>();
-    }
-  };
-
-  // Perform Matchmaking via Realtime Presence
+  // Allocate one server-authorized pair; clients cannot select different peers.
   const handleStartMatch = async () => {
     if (!user || !profile) return;
 
@@ -559,8 +479,8 @@ export default function VoiceMatchScreen() {
       ActionModal.show({
         title: (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#FFD700" }}>Eşleşme Hakkınız Bitti</Text>
-            <MaterialCommunityIcons name="crown" size={20} color="#FFD700" />
+            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#D5B075" }}>Eşleşme Hakkınız Bitti</Text>
+            <MaterialCommunityIcons name="crown" size={20} color="#D5B075" />
           </View>
         ),
         message: "Günlük 5 ücretsiz eşleşme hakkınızı tamamladınız. Sınırsız arama için VIP üye olun!",
@@ -576,116 +496,30 @@ export default function VoiceMatchScreen() {
     setStatus("searching");
     startPulseAnimation();
 
-    const blockedSet = await fetchBlockedUsers();
-    let alreadyMatched = false;
-
-    // 1. Join matchmaking channel
-    const matchmakingChannel = supabase.channel("matchmaking");
-    matchmakingChannelRef.current = matchmakingChannel;
-
-    matchmakingChannel
-      .on("presence", { event: "sync" }, () => {
-        if (alreadyMatched) return;
-        const state = matchmakingChannel.presenceState();
-        const allUsers = Object.values(state).flat() as any[];
-
-        // 1. Check if anyone in the presence state has already matched with me
-        const incomingMatch = allUsers.find(
-          (p: any) => p.user_id !== user.id && p.matched_with === user.id
-        );
-
-        if (incomingMatch) {
-          alreadyMatched = true;
-
-          // Reciprocate and stop searching
-          matchmakingChannel.track({
-            user_id: user.id,
-            username: profile.username,
-            avatar_url: profile.avatar_url,
-            is_vip: profile.is_vip,
-            role: profile.role,
-            gender: profile.gender ?? null,
-            lookingForMatch: false,
-            matched_with: incomingMatch.user_id,
-            privacy_show_in_searches: profile.privacy_show_in_searches !== false,
-          });
-
-          // Set matched details
-          setMatchedUser({
-            id: incomingMatch.user_id,
-            username: incomingMatch.username,
-            avatar_url: incomingMatch.avatar_url,
-            is_vip: incomingMatch.is_vip,
-          });
-
-          // Determine caller (UUID alphabetical comparison)
-          const isCaller = user.id < incomingMatch.user_id;
-
-          // Set up signaling
-          setupSignaling(user.id, incomingMatch.user_id, isCaller);
-          return;
-        }
-
-        // 2. Otherwise, look for someone to initiate a match with
-        const others = allUsers.filter(
-          (p: any) =>
-            p.user_id !== user.id &&
-            p.lookingForMatch &&
-            p.role !== "admin" &&
-            p.privacy_show_in_searches !== false && // Filter out users who turned off searches
-            !blockedSet.has(p.user_id) && // Filter blocked users
-            (!genderPref || p.gender === genderPref) &&
-            !p.matched_with
-        );
-
-        if (others.length > 0) {
-          alreadyMatched = true;
-          const peer = others[0];
-
-          // Set our state to matched with them
-          matchmakingChannel.track({
-            user_id: user.id,
-            username: profile.username,
-            avatar_url: profile.avatar_url,
-            is_vip: profile.is_vip,
-            role: profile.role,
-            gender: profile.gender ?? null,
-            lookingForMatch: false,
-            matched_with: peer.user_id,
-            privacy_show_in_searches: profile.privacy_show_in_searches !== false,
-          });
-
-          // Set matched details
-          setMatchedUser({
-            id: peer.user_id,
-            username: peer.username,
-            avatar_url: peer.avatar_url,
-            is_vip: peer.is_vip,
-          });
-
-          // Determine caller (UUID alphabetical comparison)
-          const isCaller = user.id < peer.user_id;
-
-          // Set up signaling
-          setupSignaling(user.id, peer.user_id, isCaller);
-        }
-      })
-      .subscribe(async (status: any) => {
-        if (status === "SUBSCRIBED") {
-          // Publish presence searching state
-          await matchmakingChannel.track({
-            user_id: user.id,
-            username: profile.username,
-            avatar_url: profile.avatar_url,
-            is_vip: profile.is_vip,
-            role: profile.role,
-            gender: profile.gender ?? null,
-            lookingForMatch: true,
-            matched_with: null,
-            privacy_show_in_searches: profile.privacy_show_in_searches !== false,
-          });
-        }
-      });
+    if (searchActiveRef.current) return;
+    searchActiveRef.current = true;
+    const searchEpoch = ++callEpochRef.current;
+    const poll = async () => {
+      let allocatedSession: string | null = null;
+      if (!searchActiveRef.current || callEpochRef.current !== searchEpoch) return;
+      try {
+        const left = await withTimeout(leavePendingRef.current, 8000);
+        if (left.error) throw Error('Önceki görüşme sunucuda kapatılamadı. Bağlantınızı kontrol edip tekrar deneyin.');
+        if (!searchActiveRef.current || callEpochRef.current !== searchEpoch) return;
+        const { data, error } = await withTimeout(supabase.rpc('join_voice_match', { p_gender_pref: genderPref || null }), 10000);
+        if (error) throw error;
+        if (!searchActiveRef.current || callEpochRef.current !== searchEpoch) return;
+        if (data?.status === 'matched' && data.peer && data.sessionId && data.room) {
+          allocatedSession = data.sessionId; searchActiveRef.current = false; matchSessionRef.current = data.sessionId;
+          setMatchedUser(data.peer);
+          await setupSignaling(user.id, data.peer.id, data.caller, data.sessionId, data.room);
+        } else matchPollRef.current = setTimeout(() => { void poll(); }, 2000);
+      } catch (error: any) {
+        if (allocatedSession ? (matchSessionRef.current !== allocatedSession || callEpochRef.current !== searchEpoch + 1) : callEpochRef.current !== searchEpoch) return;
+        ActionModal.show({ title: 'Eşleşme kurulamadı', message: error.message || 'Bağlantınızı kontrol edip tekrar deneyin.' }); cleanupCall();
+      }
+    };
+    void poll();
   };
 
   // Skip Match (Geç)
@@ -797,16 +631,16 @@ export default function VoiceMatchScreen() {
       {status === "idle" && (
         <View style={[styles.content, { paddingBottom: contentPaddingBottom }]}>
           <View style={styles.idleIllustrationWrap}>
-            <View style={[styles.circleIllustration, { backgroundColor: isDark ? "#1C212E" : "#ECEFF4" }]}>
+            <View style={[styles.circleIllustration, { backgroundColor: isDark ? "#23304A" : "#ECEFF4" }]}>
               <Ionicons name="mic" size={48} color={colors.primary} />
             </View>
           </View>
 
           <Text style={[styles.idleTitle, { color: colors.text }]}>
-            Rastgele Sesli Görüşme
+            Bir ses, yeni bir sohbet.
           </Text>
           <Text style={[styles.idleDesc, { color: colors.textSecondary }]}>
-            Kimliğiniz tamamen gizli kalacak şekilde rastgele bir kullanıcıyla sesli eşleşmeye başlayın.
+            Kendine bir sohbet arası ver. Uygun biriyle sesli tanış.
           </Text>
 
           {/* Gender preference (VIP-only) */}
@@ -856,13 +690,13 @@ export default function VoiceMatchScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.mainButton, { backgroundColor: colors.primary }]}
+            style={[styles.mainButton, { backgroundColor: colors.action }]}
             onPress={handleStartMatch}
             activeOpacity={0.8}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name="dice" size={22} color={isDark ? "#000" : "#FFF"} />
-              <Text style={[styles.mainButtonText, { color: isDark ? "#000" : "#FFF" }]}>Eşleşmeyi Başlat</Text>
+              <Ionicons name="mic-outline" size={22} color={colors.onPrimary} />
+              <Text style={[styles.mainButtonText, { color: colors.onPrimary }]}>Sohbete başla</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -899,7 +733,7 @@ export default function VoiceMatchScreen() {
                 },
               ]}
             />
-            <View style={[styles.radarCenter, { backgroundColor: colors.primary }]}>
+            <View style={[styles.radarCenter, { backgroundColor: colors.action }]}>
               <Ionicons name="infinite" size={36} color={isDark ? "#000" : "#FFF"} />
             </View>
           </View>
@@ -954,7 +788,7 @@ export default function VoiceMatchScreen() {
           {/* Time Limit Countdown Progress Bar */}
           <View style={styles.progressContainer}>
             <View style={[styles.progressTrack, { backgroundColor: "rgba(255, 255, 255, 0.15)" }]}>
-              <View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: colors.primary }]} />
+              <View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: colors.action }]} />
             </View>
             <Text style={styles.countdownText}>
               Görüşme Süresi: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}

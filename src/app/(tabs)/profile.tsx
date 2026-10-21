@@ -1,3 +1,4 @@
+import ProfileHero from '../../components/ProfileHero';
 import { InstagramEditor, SocialPanel } from '../../components/SocialPanel';
 import { requestId } from '../../lib/requestId';
 import { initRevenueCat, getRevenueCatOfferings, purchaseRevenueCatPackage } from '../../lib/revenuecat';
@@ -644,7 +645,7 @@ export default function ProfileScreen() {
         title: (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={{ fontSize: 18, fontWeight: "bold", color: colors.text }}>Yetersiz Elmas</Text>
-            <Ionicons name="diamond" size={20} color="#A855F7" />
+            <Ionicons name="diamond" size={20} color="#BCADDC" />
           </View>
         ),
         message: `Profilinizi öne çıkarmak için ${profileHighlightCost} elmas gereklidir. Mevcut bakiyeniz: ${profile.diamonds ?? 0} elmas.\n\nBakiye yüklemek için Elmas Mağazası'na gitmek ister misiniz?`,
@@ -668,7 +669,7 @@ export default function ProfileScreen() {
       title: (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text style={{ fontSize: 18, fontWeight: "bold", color: colors.text }}>Profilini Öne Çıkar</Text>
-          <Ionicons name="star" size={20} color="#FFD700" />
+          <Ionicons name="star" size={20} color="#D5B075" />
         </View>
       ),
       message: `Profilinizi 24 saat boyunca keşfet sayfasının en üst sırasına sabitlemek için ${profileHighlightCost} elmas kullanılacaktır. Onaylıyor musunuz?`,
@@ -723,12 +724,12 @@ export default function ProfileScreen() {
     <SafeAreaView
       style={[
         styles.container,
-        { backgroundColor: scheme === "dark" ? "#0C1014" : "#F2F2F7" },
+        { backgroundColor: scheme === "dark" ? "#0D1728" : "#EFE7E0" },
       ]}
       edges={["top"]}
     >
-      <View style={{ flexDirection: 'row', padding: 12, justifyContent: 'space-around' }}>
-        <TouchableOpacity onPress={() => setBankModalVisible(true)}><Text style={{ color: colors.primary }}>💎 {profile?.diamonds || 0} · Elmas Mağazası</Text></TouchableOpacity>
+      <View style={{ flexDirection: 'row', padding: 18, justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <TouchableOpacity onPress={() => setBankModalVisible(true)}><View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}><Ionicons name="diamond-outline" size={18} color={colors.primary} /><Text style={{ color: colors.primary }}>{profile?.diamonds || 0} elmas</Text></View></TouchableOpacity>
         <TouchableOpacity onPress={() => setNotificationsModalVisible(true)}><Text style={{ color: colors.primary }}>Bildirimler</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/social')}><Text style={{ color: colors.primary }}>Gizlilik</Text></TouchableOpacity>
       </View>
@@ -736,7 +737,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.circleBtn,
-            { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
+            { backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF" },
           ]}
           onPress={() => {
             if (router.canGoBack()) {
@@ -752,7 +753,7 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={[
             styles.circleBtn,
-            { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
+            { backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF" },
           ]}
           onPress={() => setQrModalVisible(true)}
         >
@@ -761,73 +762,8 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
+        <ProfileHero name={profile?.username || 'Profiliniz'} uri={avatarUri || profile?.avatar_url} bio={profile?.bio} verified={!!profile?.email_verified_at} onEdit={() => setEditProfileVisible(true)} />
         {user && <SocialPanel userId={user.id} />}
-        <View style={styles.profileArea}>
-          <View
-            style={[
-              styles.statusBubble,
-              { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
-            ]}
-          >
-            <Text style={[styles.statusBubbleText, { color: colors.text }]}>
-              {profile?.bio || "Kendinden bahset..."}
-            </Text>
-            {/* Bubble Tails */}
-            <View
-              style={[
-                styles.statusBubbleTail1,
-                { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
-              ]}
-            />
-            <View
-              style={[
-                styles.statusBubbleTail2,
-                { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
-              ]}
-            />
-          </View>
-
-          <TouchableOpacity onPress={handlePickAvatar} style={styles.avatar}>
-            {avatarUri ? (
-              <ExpoImage
-                source={{ uri: avatarUri }}
-                style={styles.avatarImage}
-                contentFit="cover"
-              />
-            ) : profile?.avatar_url ? (
-              <ExpoImage
-                source={{ uri: profile.avatar_url }}
-                style={styles.avatarImage}
-                contentFit="cover"
-              />
-            ) : (
-              <View
-                style={[
-                  styles.avatarPlaceholder,
-                  { backgroundColor: colors.backgroundSelected },
-                ]}
-              >
-                <Ionicons
-                  name="camera-outline"
-                  size={48}
-                  color={colors.textSecondary}
-                />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.username}
-            onPress={() => setEditProfileVisible(true)}
-          >
-            <Text style={[styles.usernameText, { color: colors.text }]}>
-              {profile?.username || "Kullanıcı"}{profile?.email_verified_at ? " ✓" : ""}
-            </Text>
-            <View style={styles.plus}>
-              <Text style={styles.plusText}>+</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
 
         <Text
           style={[styles.sectionTitleText, { color: colors.textSecondary }]}
@@ -839,7 +775,7 @@ export default function ProfileScreen() {
         <View
           style={[
             styles.card,
-            { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
+            { backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF" },
           ]}
         >
           {/* Abonelik */}
@@ -847,7 +783,7 @@ export default function ProfileScreen() {
             style={[
               styles.item,
               {
-                borderBottomColor: scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                borderBottomColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
               },
             ]}
             onPress={() => setVipModalVisible(true)}
@@ -894,12 +830,12 @@ export default function ProfileScreen() {
             style={[
               styles.item,
               {
-                borderBottomColor: scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                borderBottomColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
               },
             ]}
             onPress={() => setHighlightsModalVisible(true)}
           >
-            <View style={[styles.iconCircle, { backgroundColor: "#EAB308" }]}>
+            <View style={[styles.iconCircle, { backgroundColor: "#D5B075" }]}>
               <Ionicons name="star" size={18} color="#FFFFFF" />
             </View>
             <View style={styles.rowInfo}>
@@ -915,7 +851,7 @@ export default function ProfileScreen() {
             {profile?.is_highlighted && (
               <View
                 style={{
-                  backgroundColor: "#EAB30820",
+                  backgroundColor: "#D5B07520",
                   paddingHorizontal: 8,
                   paddingVertical: 2,
                   borderRadius: 8,
@@ -923,7 +859,7 @@ export default function ProfileScreen() {
                 }}
               >
                 <Text
-                  style={{ color: "#EAB308", fontSize: 11, fontWeight: "bold" }}
+                  style={{ color: "#D5B075", fontSize: 11, fontWeight: "bold" }}
                 >
                   Aktif
                 </Text>
@@ -941,7 +877,7 @@ export default function ProfileScreen() {
             style={[
               styles.item,
               {
-                borderBottomColor: scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                borderBottomColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
               },
               !cashWithdrawalEnabled && { borderBottomWidth: 0 },
             ]}
@@ -1026,7 +962,7 @@ export default function ProfileScreen() {
         <View
           style={[
             styles.card,
-            { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
+            { backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF" },
           ]}
         >
           {/* Hesap */}
@@ -1034,7 +970,7 @@ export default function ProfileScreen() {
             style={[
               styles.item,
               {
-                borderBottomColor: scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                borderBottomColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
               },
             ]}
             onPress={() => setEditProfileVisible(true)}
@@ -1081,7 +1017,7 @@ export default function ProfileScreen() {
             style={[
               styles.item,
               {
-                borderBottomColor: scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                borderBottomColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
               },
             ]}
             onPress={() => setPrivacyModalVisible(true)}
@@ -1111,7 +1047,7 @@ export default function ProfileScreen() {
             style={[
               styles.item,
               {
-                borderBottomColor: scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                borderBottomColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
               },
             ]}
             onPress={() => setThemeModalVisible(true)}
@@ -1171,7 +1107,7 @@ export default function ProfileScreen() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "#A855F720",
+                backgroundColor: "#BCADDC20",
                 paddingHorizontal: 8,
                 paddingVertical: 2,
                 borderRadius: 8,
@@ -1179,9 +1115,9 @@ export default function ProfileScreen() {
                 gap: 2,
               }}
             >
-              <Ionicons name="diamond" size={10} color="#A855F7" />
+              <Ionicons name="diamond" size={10} color="#BCADDC" />
               <Text
-                style={{ color: "#A855F7", fontWeight: "bold", fontSize: 11 }}
+                style={{ color: "#BCADDC", fontWeight: "bold", fontSize: 11 }}
               >
                 {profile?.diamonds ?? 0}
               </Text>
@@ -1201,7 +1137,7 @@ export default function ProfileScreen() {
               styles.adminButton,
               {
                 borderColor: colors.primary,
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
               },
             ]}
             onPress={() => router.push("/admin")}
@@ -1232,7 +1168,7 @@ export default function ProfileScreen() {
             style={[
               styles.logoutButton,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 borderColor: colors.border,
               },
             ]}
@@ -1287,7 +1223,7 @@ export default function ProfileScreen() {
           <View
             style={[
               styles.modalContent,
-              { backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF" },
+              { backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF" },
             ]}
           >
             <View style={styles.modalHeader}>
@@ -1349,7 +1285,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={[
                 styles.modalSaveButton,
-                { backgroundColor: colors.primary },
+                { backgroundColor: colors.action },
               ]}
               onPress={() => setQrModalVisible(false)}
             >
@@ -1371,7 +1307,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -1407,7 +1343,7 @@ export default function ProfileScreen() {
                 style={[
                   styles.vipStatusCard,
                   {
-                    backgroundColor: scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                    backgroundColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
                   },
                 ]}
               >
@@ -1493,7 +1429,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -1523,14 +1459,14 @@ export default function ProfileScreen() {
                     padding: 16,
                     alignItems: "center",
                     borderWidth: 1.2,
-                    borderColor: "#EAB308",
+                    borderColor: "#D5B075",
                     marginBottom: 20,
                   }}
                 >
                   <Ionicons
                     name="star"
                     size={36}
-                    color="#EAB308"
+                    color="#D5B075"
                     style={{ marginBottom: 8 }}
                   />
                   <Text
@@ -1556,7 +1492,7 @@ export default function ProfileScreen() {
                   </Text>
                   <View
                     style={{
-                      backgroundColor: "#EAB308",
+                      backgroundColor: "#D5B075",
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                       borderRadius: 12,
@@ -1644,12 +1580,12 @@ export default function ProfileScreen() {
                 >
                   <View
                     style={{
-                      backgroundColor: "#EAB30820",
+                      backgroundColor: "#D5B07520",
                       padding: 6,
                       borderRadius: 8,
                     }}
                   >
-                    <Ionicons name="rocket-outline" size={18} color="#EAB308" />
+                    <Ionicons name="rocket-outline" size={18} color="#D5B075" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text
@@ -1678,7 +1614,7 @@ export default function ProfileScreen() {
                 >
                   <View
                     style={{
-                      backgroundColor: "#EAB30820",
+                      backgroundColor: "#D5B07520",
                       padding: 6,
                       borderRadius: 8,
                     }}
@@ -1686,7 +1622,7 @@ export default function ProfileScreen() {
                     <Ionicons
                       name="chatbubbles-outline"
                       size={18}
-                      color="#EAB308"
+                      color="#D5B075"
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -1698,11 +1634,11 @@ export default function ProfileScreen() {
                         marginBottom: 2,
                       }}
                     >
-                      10 Kat Daha Fazla Etkileşim
+                      Yeni sohbetlere yer aç
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                       Daha fazla sohbete başlayın, yeni arkadaşlarla tanışma
-                      şansınızı katlayın.
+                      fırsatı yakalayın.
                     </Text>
                   </View>
                 </View>
@@ -1716,7 +1652,7 @@ export default function ProfileScreen() {
                 >
                   <View
                     style={{
-                      backgroundColor: "#EAB30820",
+                      backgroundColor: "#D5B07520",
                       padding: 6,
                       borderRadius: 8,
                     }}
@@ -1724,7 +1660,7 @@ export default function ProfileScreen() {
                     <Ionicons
                       name="sparkles-outline"
                       size={18}
-                      color="#EAB308"
+                      color="#D5B075"
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -1749,14 +1685,14 @@ export default function ProfileScreen() {
               {/* Purchase Button / Status info */}
               <TouchableOpacity
                 style={{
-                  backgroundColor: "#EAB308",
+                  backgroundColor: "#D5B075",
                   paddingVertical: 14,
                   borderRadius: 16,
                   alignItems: "center",
                   flexDirection: "row",
                   justifyContent: "center",
                   gap: 8,
-                  shadowColor: "#EAB308",
+                  shadowColor: "#D5B075",
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.25,
                   shadowRadius: 8,
@@ -1813,7 +1749,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -1848,7 +1784,7 @@ export default function ProfileScreen() {
                 style={[
                   styles.card,
                   {
-                    backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                    backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                     marginHorizontal: 0,
                     paddingVertical: 8,
                   },
@@ -1887,7 +1823,7 @@ export default function ProfileScreen() {
                         {
                           borderBottomWidth: idx === 3 ? 0 : 1,
                           borderBottomColor:
-                            scheme === "dark" ? "#1C212E" : "#ECECEC",
+                            scheme === "dark" ? "#23304A" : "#ECECEC",
                         },
                       ]}
                     >
@@ -1951,7 +1887,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -1987,7 +1923,7 @@ export default function ProfileScreen() {
                       key={request.id}
                       style={{
                         backgroundColor:
-                          scheme === "dark" ? "#1C212E" : "#F8FAFC",
+                          scheme === "dark" ? "#23304A" : "#F8FAFC",
                         borderColor: colors.border,
                         borderWidth: 1,
                         borderRadius: 16,
@@ -2091,7 +2027,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -2121,7 +2057,7 @@ export default function ProfileScreen() {
                     {
                       color: colors.text,
                       backgroundColor:
-                        scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                        scheme === "dark" ? "#23304A" : "#EFE7E0",
                       borderColor: colors.border,
                     },
                   ]}
@@ -2146,7 +2082,7 @@ export default function ProfileScreen() {
                     {
                       color: colors.text,
                       backgroundColor:
-                        scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                        scheme === "dark" ? "#23304A" : "#EFE7E0",
                       borderColor: colors.border,
                     },
                   ]}
@@ -2169,7 +2105,7 @@ export default function ProfileScreen() {
                     {
                       color: colors.text,
                       backgroundColor:
-                        scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                        scheme === "dark" ? "#23304A" : "#EFE7E0",
                       borderColor: colors.border,
                     },
                   ]}
@@ -2208,8 +2144,8 @@ export default function ProfileScreen() {
                             backgroundColor: selected
                               ? colors.primary + "20"
                               : scheme === "dark"
-                                ? "#1C212E"
-                                : "#F2F2F7",
+                                ? "#23304A"
+                                : "#EFE7E0",
                             borderColor: selected
                               ? colors.primary
                               : colors.border,
@@ -2253,7 +2189,7 @@ export default function ProfileScreen() {
                     {
                       color: colors.text,
                       backgroundColor:
-                        scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                        scheme === "dark" ? "#23304A" : "#EFE7E0",
                       borderColor: colors.border,
                     },
                   ]}
@@ -2276,7 +2212,7 @@ export default function ProfileScreen() {
                     {
                       color: colors.text,
                       backgroundColor:
-                        scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                        scheme === "dark" ? "#23304A" : "#EFE7E0",
                       borderColor: colors.border,
                     },
                   ]}
@@ -2299,7 +2235,7 @@ export default function ProfileScreen() {
                     {
                       color: colors.text,
                       backgroundColor:
-                        scheme === "dark" ? "#1C212E" : "#F2F2F7",
+                        scheme === "dark" ? "#23304A" : "#EFE7E0",
                       borderColor: colors.border,
                     },
                   ]}
@@ -2311,6 +2247,7 @@ export default function ProfileScreen() {
                 />
               </View>
 
+              <TouchableOpacity onPress={handlePickAvatar} style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.backgroundSelected, marginBottom: 16 }}><Text style={{ color: colors.text }}>Profil fotoğrafını değiştir</Text></TouchableOpacity>
               <InstagramEditor />
               <View style={{ padding: 16, gap: 12 }}>
                 <Text style={{ color: colors.text }}>E-posta doğrulaması</Text>
@@ -2327,7 +2264,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={[
                   styles.saveButton,
-                  { backgroundColor: colors.primary, marginTop: 24 },
+                  { backgroundColor: colors.action, marginTop: 24 },
                 ]}
                 onPress={async () => {
                   await handleSave();
@@ -2357,7 +2294,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -2390,7 +2327,7 @@ export default function ProfileScreen() {
                 style={[
                   styles.card,
                   {
-                    backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                    backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                     marginHorizontal: 0,
                     paddingVertical: 8,
                   },
@@ -2424,7 +2361,7 @@ export default function ProfileScreen() {
                         {
                           borderBottomWidth: idx === 2 ? 0 : 1,
                           borderBottomColor:
-                            scheme === "dark" ? "#1C212E" : "#ECECEC",
+                            scheme === "dark" ? "#23304A" : "#ECECEC",
                         },
                       ]}
                     >
@@ -2488,7 +2425,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -2539,7 +2476,7 @@ export default function ProfileScreen() {
                           backgroundColor: selected
                             ? colors.primary + "20"
                             : scheme === "dark"
-                              ? "#1C212E"
+                              ? "#23304A"
                               : "#FFFFFF",
                           borderColor: selected
                             ? colors.primary
@@ -2582,7 +2519,7 @@ export default function ProfileScreen() {
             style={[
               styles.bottomSheetContent,
               {
-                backgroundColor: scheme === "dark" ? "#121620" : "#FFFFFF",
+                backgroundColor: scheme === "dark" ? "#172237" : "#FFFFFF",
                 paddingBottom: Math.max(insets.bottom, 16) + 24,
               },
             ]}
@@ -2591,7 +2528,7 @@ export default function ProfileScreen() {
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                <Ionicons name="diamond-outline" size={20} color="#A855F7" />
+                <Ionicons name="diamond-outline" size={20} color="#BCADDC" />
                 <Text style={[styles.bottomSheetTitle, { color: colors.text }]}>
                   Elmas Mağazası
                 </Text>
@@ -2630,7 +2567,7 @@ export default function ProfileScreen() {
                       marginTop: 4,
                     }}
                   >
-                    <Ionicons name="diamond" size={24} color="#A855F7" />
+                    <Ionicons name="diamond" size={24} color="#BCADDC" />
                     <Text
                       style={{
                         color: colors.text,
@@ -2713,7 +2650,7 @@ export default function ProfileScreen() {
                       borderWidth: 1,
                       borderColor: pkg.badge
                         ? getBadgeColor(pkg.badge) + "50"
-                        : "#A855F730",
+                        : "#BCADDC30",
                       position: "relative",
                       overflow: "hidden",
                     }}
@@ -2733,7 +2670,7 @@ export default function ProfileScreen() {
                         {getBadgeLabel(pkg.badge)}
                       </View>
                     )}
-                    <Ionicons name="diamond" size={24} color="#A855F7" />
+                    <Ionicons name="diamond" size={24} color="#BCADDC" />
                     <Text
                       style={{
                         color: colors.text,
@@ -3011,9 +2948,9 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   circleBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",

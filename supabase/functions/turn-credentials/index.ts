@@ -38,14 +38,16 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
   const turnSecret = Deno.env.get("TURN_SECRET");
-  const turnDomain = Deno.env.get("TURN_DOMAIN") ?? "turn.kodmatex.com";
+  const turnDomain = Deno.env.get("TURN_DOMAIN") ?? "";
   const ttlSeconds = Number(Deno.env.get("TURN_TTL_SECONDS") ?? "600");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const authHeader = req.headers.get("Authorization") ?? "";
 
-  if (!turnSecret || !supabaseUrl || !supabaseAnonKey) {
+  if (!turnSecret || !turnDomain || !/^[a-z0-9.-]+$/i.test(turnDomain) || !Number.isFinite(ttlSeconds) || ttlSeconds < 60 || ttlSeconds > 86400 || !supabaseUrl || !supabaseAnonKey) {
     return json({ error: "TURN credential service is not configured." }, 500);
   }
 

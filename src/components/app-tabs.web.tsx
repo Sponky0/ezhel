@@ -20,7 +20,7 @@ const SIDEBAR_WIDTH_COLLAPSED = 72;
 const MOBILE_TAB_BAR_HEIGHT = 64;
 
 // Tab Order on Web (Instagram-like: Home/Explore first, then updates, Match, Chat, Profile)
-const TAB_ORDER_WEB = ["index", "stories", "explore", "chat", "profile"];
+const TAB_ORDER_WEB = ["index", "chat", "explore", "stories", "profile"];
 
 interface RouteInfo {
   name: string;
@@ -98,7 +98,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="stories"
         options={{
-          title: "Hikayeler",
+          title: "Hikâyeler",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "flame" : "flame-outline"}
@@ -225,9 +225,11 @@ function WebTabBar({ state, descriptors, navigation }: any) {
             <Pressable
               key={route.key}
               onPress={onPress}
+              accessibilityRole="tab" accessibilityLabel={options.title || route.name} accessibilityState={{ selected: isFocused }}
               style={styles.mobileTabItem}
             >
               {renderIcon()}
+              <Text style={{ color: isFocused ? colors.primary : colors.textSecondary, fontFamily: Fonts.bodyMedium, fontSize: 10, marginTop: 5 }}>{options.title || route.name}</Text>
             </Pressable>
           );
         })}
@@ -254,7 +256,7 @@ function WebTabBar({ state, descriptors, navigation }: any) {
         {isExpanded ? (
           <Text style={[styles.brandText, { color: colors.text }]}>Napan</Text>
         ) : (
-          <View style={[styles.brandIcon, { backgroundColor: colors.primary }]}>
+          <View style={[styles.brandIcon, { backgroundColor: colors.action }]}>
             <Ionicons name="chatbubble-ellipses" size={20} color="#FFFFFF" />
           </View>
         )}

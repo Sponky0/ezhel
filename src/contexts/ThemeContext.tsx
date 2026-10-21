@@ -15,7 +15,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function AppThemeProvider({ children }: { children: React.ReactNode }) {
-  const [themeSetting, setThemeSettingState] = useState<ThemeSetting>('system');
+  const [themeSetting, setThemeSettingState] = useState<ThemeSetting>('dark');
   const systemScheme = useRNColorScheme();
 
   useEffect(() => {

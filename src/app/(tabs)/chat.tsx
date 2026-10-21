@@ -353,11 +353,11 @@ export default function ChatListScreen() {
           content = content.replace("🎁 ", "");
           previewText = isMeLastSender ? (
             <Text>
-              Siz: <Ionicons name="gift-outline" size={12} color="#A855F7" /> {content}
+              Siz: <Ionicons name="gift-outline" size={12} color="#BCADDC" /> {content}
             </Text>
           ) : (
             <Text>
-              <Ionicons name="gift-outline" size={12} color="#A855F7" /> {content}
+              <Ionicons name="gift-outline" size={12} color="#BCADDC" /> {content}
             </Text>
           );
         } else {
@@ -487,7 +487,7 @@ export default function ChatListScreen() {
 
         {/* Search Bar */}
         <View style={styles.searchBarContainer}>
-          <View style={[styles.searchBarInputRow, { backgroundColor: isDark ? "#1C212E" : "#F2F4F7" }]}>
+          <View style={[styles.searchBarInputRow, { backgroundColor: isDark ? "#23304A" : "#EFE7E0" }]}>
             <Ionicons name="search" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
             <TextInput
               style={[styles.searchTextInput, { color: colors.text }]}
@@ -604,11 +604,11 @@ const styles = StyleSheet.create({
   },
   headerUserAvatar: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
+    height: 48,
+    borderRadius: 14,
   },
   headerTextTitle: {
-    fontSize: 30,
+    fontSize: 28,
     fontFamily: Fonts.headingBlack,
     fontWeight: "bold",
     flex: 1,
@@ -620,8 +620,8 @@ const styles = StyleSheet.create({
   searchBarInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    height: 40,
-    borderRadius: 20,
+    height: 48,
+    borderRadius: 14,
     paddingHorizontal: Spacing.three,
   },
   searchTextInput: {
@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#0084FF",
+    backgroundColor: "#AA423C",
     marginLeft: 8,
   },
 });

@@ -6,3 +6,6 @@ verify_jwt = false
 # Supports projects using publishable API keys rather than legacy JWT API keys.
 [functions.read-message-media]
 verify_jwt = false
+
+[functions.turn-credentials]
+verify_jwt = false

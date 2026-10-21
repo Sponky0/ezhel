@@ -28,76 +28,6 @@ import { supabase } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
 
-// Stable detail mapping helper based on user ID hash
-function getStableDetails(userId: string) {
-  if (!userId) {
-    return {
-      age: 24,
-      country: "Turkey",
-      flag: "🇹🇷",
-      language: "Turkish",
-      interests: ["Music", "Movies"],
-    };
-  }
-
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  hash = Math.abs(hash);
-
-  // Age between 19 and 35
-  const age = 19 + (hash % 17);
-
-  // Country, Flag and Language
-  const countries = [
-    { name: "Netherlands", flag: "🇳🇱", language: "Dutch" },
-    { name: "Turkey", flag: "🇹🇷", language: "Turkish" },
-    { name: "Germany", flag: "🇩🇪", language: "German" },
-    { name: "United States", flag: "🇺🇸", language: "English" },
-    { name: "United Kingdom", flag: "🇬🇧", language: "English" },
-    { name: "France", flag: "🇫🇷", language: "French" },
-    { name: "Italy", flag: "🇮🇹", language: "Italian" },
-    { name: "Spain", flag: "🇪🇸", language: "Spanish" },
-    { name: "Brazil", flag: "🇧🇷", language: "Portuguese" },
-    { name: "Japan", flag: "🇯🇵", language: "Japanese" },
-  ];
-  const countryData = countries[hash % countries.length];
-
-  // Interests Pool
-  const interestPool = [
-    "Music",
-    "Reading",
-    "Travel",
-    "Fitness",
-    "Movies",
-    "Gaming",
-    "Cooking",
-    "Photography",
-    "Art",
-    "Dancing",
-    "Sports",
-    "Technology",
-  ];
-  const interestCount = 2 + (hash % 3); // 2 to 4 interests
-  const selectedInterests: string[] = [];
-  for (let i = 0; i < interestCount; i++) {
-    const interest = interestPool[(hash + i * 7) % interestPool.length];
-    if (!selectedInterests.includes(interest)) {
-      selectedInterests.push(interest);
-    }
-  }
-
-  return {
-    age,
-    country: countryData.name,
-    flag: countryData.flag,
-    language: countryData.language,
-    interests:
-      selectedInterests.length > 0 ? selectedInterests : ["Coffee", "Chatting"],
-  };
-}
-
 function getFlagEmoji(country: string | null | undefined): string {
   if (!country) return "🌐";
   const normalized = country.trim().toLowerCase();
@@ -185,7 +115,7 @@ export default function UserProfileScreen() {
           supabase
             .from("profiles")
             .select(
-              "id, username, avatar_url, bio, is_online, language, country, age, hobbies",
+              "id, username, avatar_url, bio, is_online, language, country, age, hobbies, email_verified_at",
             )
             .eq("id", userId)
             .single(),
@@ -210,21 +140,11 @@ export default function UserProfileScreen() {
     fetchUserProfile();
   }, [userId, user]);
 
-  const stableDetails = getStableDetails(userId || "");
-
-  const displayAge =
-    profileData && profileData.age !== null && profileData.age !== undefined
-      ? profileData.age
-      : stableDetails.age;
-
-  const displayCountry = profileData?.country || stableDetails.country;
+  const displayAge = profileData?.age;
+  const displayCountry = profileData?.country || 'Konum belirtilmemiş';
   const displayFlag = getFlagEmoji(displayCountry);
-  const displayLanguage = profileData?.language || stableDetails.language;
-
-  const displayHobbies =
-    profileData?.hobbies && profileData.hobbies.length > 0
-      ? profileData.hobbies
-      : stableDetails.interests;
+  const displayLanguage = profileData?.language || 'Dil belirtilmemiş';
+  const displayHobbies = profileData?.hobbies || [];
 
   const handleMessagePress = async () => {
     if (!user || !profileData) return;
@@ -446,7 +366,7 @@ export default function UserProfileScreen() {
             >
               Hediye Gönderildi
             </Text>
-            <Ionicons name="diamond" size={20} color="#A855F7" />
+            <Ionicons name="diamond" size={20} color="#BCADDC" />
           </View>
         ),
         message: `${profileData!.username} kullanıcısına ${giftAmount} elmas gönderildi!`,
@@ -506,7 +426,7 @@ export default function UserProfileScreen() {
           Kullanıcı bulunamadı.
         </Text>
         <TouchableOpacity
-          style={[styles.backTextButton, { backgroundColor: colors.primary }]}
+          style={[styles.backTextButton, { backgroundColor: colors.action }]}
           onPress={() => router.back()}
         >
           <Text style={styles.backTextButtonText}>Geri Dön</Text>
@@ -544,7 +464,6 @@ export default function UserProfileScreen() {
           { paddingBottom: 110 + (insets.bottom > 0 ? insets.bottom + 8 : 12) },
         ]}
       >
-        <SocialPanel userId={userId} />
         {/* Cover Photo */}
         <View style={styles.coverContainer}>
           <Image
@@ -555,34 +474,17 @@ export default function UserProfileScreen() {
             }
             style={styles.coverImage}
             contentFit="cover"
-            blurRadius={15}
           />
           <View style={styles.coverOverlay} />
-        </View>
-
-        {/* Overlapping Avatar */}
-        <View style={styles.avatarContainer}>
-          <View
-            style={[styles.avatarBorder, { borderColor: colors.background }]}
-          >
-            <Image
-              source={
-                profileData.avatar_url
-                  ? { uri: profileData.avatar_url }
-                  : require("../../assets/images/place-holder.png")
-              }
-              style={styles.avatarImage}
-              contentFit="cover"
-            />
-          </View>
         </View>
 
         {/* User Details Details */}
         <View style={styles.detailsContainer}>
           <Text style={[styles.nameText, { color: colors.text }]}>
-            {profileData.username}{profileData.email_verified_at ? " ✓" : ""}, {displayAge}
+            {profileData.username}{profileData.email_verified_at ? " ✓" : ""}{displayAge != null ? `, ${displayAge}` : ""}
           </Text>
 
+          <SocialPanel userId={userId} />
           {/* Location & Language info */}
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
@@ -698,7 +600,7 @@ export default function UserProfileScreen() {
           style={[
             styles.messageButton,
             {
-              backgroundColor: colors.primary,
+              backgroundColor: colors.action,
             },
           ]}
           onPress={handleMessagePress}
@@ -778,7 +680,7 @@ export default function UserProfileScreen() {
               <Text
                 style={{ color: colors.text, fontSize: 20, fontWeight: "bold" }}
               >
-                <Ionicons name="gift" size={20} color="#A855F7" /> Hediye Gönder
+                <Ionicons name="gift" size={20} color="#BCADDC" /> Hediye Gönder
               </Text>
               <TouchableOpacity onPress={() => setGiftModalVisible(false)}>
                 <Ionicons
@@ -823,8 +725,8 @@ export default function UserProfileScreen() {
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
               >
-                <Ionicons name="diamond" size={14} color="#A855F7" />
-                <Text style={{ color: "#A855F7", fontWeight: "bold" }}>
+                <Ionicons name="diamond" size={14} color="#BCADDC" />
+                <Text style={{ color: "#BCADDC", fontWeight: "bold" }}>
                   Bakiye: {profile?.diamonds ?? 0}
                 </Text>
               </View>
@@ -850,7 +752,7 @@ export default function UserProfileScreen() {
                     minWidth: "22%",
                     backgroundColor:
                       giftAmount === amount
-                        ? "#A855F7"
+                        ? "#BCADDC"
                         : scheme === "dark"
                           ? "#1E1B3A"
                           : "#F3F0FF",
@@ -859,13 +761,13 @@ export default function UserProfileScreen() {
                     alignItems: "center",
                     borderWidth: 1,
                     borderColor:
-                      giftAmount === amount ? "#A855F7" : "#A855F730",
+                      giftAmount === amount ? "#BCADDC" : "#BCADDC30",
                   }}
                 >
                   <Ionicons
                     name="diamond"
                     size={18}
-                    color={giftAmount === amount ? "#FFF" : "#A855F7"}
+                    color={giftAmount === amount ? "#FFF" : "#BCADDC"}
                   />
                   <Text
                     style={{
@@ -909,7 +811,7 @@ export default function UserProfileScreen() {
               onPress={handleSendGift}
               disabled={sendingGift || giftAmount <= 0}
               style={{
-                backgroundColor: giftAmount > 0 ? "#A855F7" : "#A855F750",
+                backgroundColor: giftAmount > 0 ? "#BCADDC" : "#BCADDC50",
                 borderRadius: 14,
                 paddingVertical: 16,
                 alignItems: "center",
@@ -1141,7 +1043,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#A855F7",
+    backgroundColor: "#BCADDC",
     justifyContent: "center",
     alignItems: "center",
     marginHorizontal: 8,

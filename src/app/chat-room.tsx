@@ -501,7 +501,7 @@ export default function ChatRoomScreen() {
         title: (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={{ fontSize: 18, fontWeight: "bold", color: colors.text }}>Hediye Gönderildi</Text>
-            <Ionicons name="diamond" size={20} color="#A855F7" />
+            <Ionicons name="diamond" size={20} color="#BCADDC" />
           </View>
         ),
         message: `${recipientProfile?.username || recipientName} kullanıcısına ${giftAmount} elmas gönderildi!`,
@@ -540,7 +540,7 @@ export default function ChatRoomScreen() {
               style={[
                 styles.msgBubble,
                 styles.incomingBubble,
-                { backgroundColor: scheme === "dark" ? "#242526" : "#E4E6EB" }
+                { backgroundColor: colors.backgroundElement }
               ]}
             >
               {item.story_preview_url && <StoryReplyPreview uri={item.story_preview_url} available={!!item.story_id} />}
@@ -550,8 +550,8 @@ export default function ChatRoomScreen() {
                 </TouchableOpacity>
               ) : item.content?.startsWith("🎁 Hediye:") ? (
                 <View style={{ alignItems: "center", paddingVertical: 4 }}>
-                  <Ionicons name="diamond" size={28} color="#A855F7" />
-                  <Text style={{ color: "#A855F7", fontWeight: "bold", fontSize: 15, marginTop: 4 }}>
+                  <Ionicons name="diamond" size={28} color="#BCADDC" />
+                  <Text style={{ color: "#BCADDC", fontWeight: "bold", fontSize: 15, marginTop: 4 }}>
                     {item.content?.replace("🎁 ", "")}
                   </Text>
                 </View>
@@ -587,7 +587,7 @@ export default function ChatRoomScreen() {
         onLongPress={() => handleDeleteMessage(item.id)}
         style={styles.outgoingBubbleContainer}
       >
-        <View style={[styles.msgBubble, styles.outgoingBubble, { backgroundColor: colors.primary }]}>
+        <View style={[styles.msgBubble, styles.outgoingBubble, { backgroundColor: colors.action }]}>
           {item.story_preview_url && <StoryReplyPreview uri={item.story_preview_url} available={!!item.story_id} />}
           {item.private_media ? <MessageMedia message={item} /> : item.media_url ? (
             <TouchableOpacity activeOpacity={0.9} onPress={() => setSelectedImageUri(item.media_url)}>
@@ -595,8 +595,8 @@ export default function ChatRoomScreen() {
             </TouchableOpacity>
           ) : item.content?.startsWith("🎁 Hediye:") ? (
             <View style={{ alignItems: "center", paddingVertical: 4 }}>
-              <Ionicons name="diamond" size={28} color="#FFD700" />
-              <Text style={{ color: "#FFD700", fontWeight: "bold", fontSize: 15, marginTop: 4 }}>
+              <Ionicons name="diamond" size={28} color="#D5B075" />
+              <Text style={{ color: "#D5B075", fontWeight: "bold", fontSize: 15, marginTop: 4 }}>
                 {item.content?.replace("🎁 ", "")}
               </Text>
             </View>
@@ -760,7 +760,7 @@ export default function ChatRoomScreen() {
             <Ionicons
               name="gift"
               size={24}
-              color="#A855F7"
+              color="#BCADDC"
             />
           </TouchableOpacity>
 
@@ -769,7 +769,7 @@ export default function ChatRoomScreen() {
             style={[
               styles.inputContainer,
               {
-                backgroundColor: scheme === "dark" ? "#1C212E" : "#F2F4F7",
+                backgroundColor: scheme === "dark" ? "#23304A" : "#EFE7E0",
               },
             ]}
           >
@@ -834,7 +834,7 @@ export default function ChatRoomScreen() {
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <Text style={{ color: colors.text, fontSize: 20, fontWeight: "bold" }}>
-                <Ionicons name="gift" size={20} color="#A855F7" /> Hediye Gönder
+                <Ionicons name="gift" size={20} color="#BCADDC" /> Hediye Gönder
               </Text>
               <TouchableOpacity onPress={() => setGiftModalVisible(false)}>
                 <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
@@ -853,8 +853,8 @@ export default function ChatRoomScreen() {
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Ionicons name="diamond" size={14} color="#A855F7" />
-                <Text style={{ color: "#A855F7", fontWeight: "bold" }}>
+                <Ionicons name="diamond" size={14} color="#BCADDC" />
+                <Text style={{ color: "#BCADDC", fontWeight: "bold" }}>
                   Bakiye: {profile?.diamonds ?? 0}
                 </Text>
               </View>
@@ -868,15 +868,15 @@ export default function ChatRoomScreen() {
                   style={{
                     flex: 1,
                     minWidth: "22%",
-                    backgroundColor: giftAmount === amount ? "#A855F7" : (scheme === "dark" ? "#1E1B3A" : "#F3F0FF"),
+                    backgroundColor: giftAmount === amount ? colors.action : (scheme === "dark" ? "#1E1B3A" : "#F3F0FF"),
                     borderRadius: 12,
                     paddingVertical: 12,
                     alignItems: "center",
                     borderWidth: 1,
-                    borderColor: giftAmount === amount ? "#A855F7" : "#A855F730",
+                    borderColor: giftAmount === amount ? colors.action : "#BCADDC30",
                   }}
                 >
-                  <Ionicons name="diamond" size={18} color={giftAmount === amount ? "#FFF" : "#A855F7"} />
+                  <Ionicons name="diamond" size={18} color={giftAmount === amount ? "#FFF" : "#BCADDC"} />
                   <Text style={{ color: giftAmount === amount ? "#FFF" : colors.text, fontWeight: "bold", fontSize: 14, marginTop: 2 }}>
                     {amount}
                   </Text>
@@ -902,7 +902,7 @@ export default function ChatRoomScreen() {
               onPress={handleSendGift}
               disabled={sendingGift || giftAmount <= 0}
               style={{
-                backgroundColor: giftAmount > 0 ? "#A855F7" : "#A855F750",
+                backgroundColor: giftAmount > 0 ? colors.action : colors.backgroundSelected,
                 borderRadius: 14,
                 paddingVertical: 16,
                 alignItems: "center",
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
   msgBubble: {
     paddingHorizontal: 14,
     paddingVertical: 9,
-    borderRadius: 18,
+    borderRadius: 16,
   },
   incomingBubble: {
     borderTopLeftRadius: 18,

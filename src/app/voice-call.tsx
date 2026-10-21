@@ -2,13 +2,11 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Animated,
   Easing,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
@@ -27,6 +25,7 @@ export default function VoiceCallScreen() {
 
   const {
     callStatus,
+    callError,
     timeLeft,
     isMuted,
     isSpeakerOn,
@@ -106,7 +105,7 @@ export default function VoiceCallScreen() {
       case "connected":
         return "Sesli Arama Aktif";
       case "disconnected":
-        return "Arama Sonlandırıldı";
+        return callError || "Arama sonlandırıldı";
       case "rejected":
         return "Arama Reddedildi";
       case "no_answer":
@@ -119,23 +118,13 @@ export default function VoiceCallScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: "#000" }]}>
-      {/* Full Screen Blurred Avatar Background */}
-      <View style={styles.blurBgContainer}>
-        <Image
-          source={peerAvatar ? { uri: peerAvatar } : require("../../assets/images/place-holder.png")}
-          style={styles.blurBgImage}
-          contentFit="cover"
-        />
-        <BlurView intensity={Platform.OS === "ios" ? 50 : 80} tint="dark" style={StyleSheet.absoluteFill} />
-      </View>
-
+    <View style={[styles.container, { backgroundColor: "#0D1728" }]}>
       <SafeAreaView style={StyleSheet.absoluteFill} edges={["top", "bottom"]}>
         {/* Top Header */}
         <View style={styles.header}>
           <Ionicons name="shield-checkmark" size={16} color="#10B981" />
           <Text style={styles.secureText}>
-            Uçtan Uca Şifreli Sesli Görüşme
+            Napan · Sesli görüşme
           </Text>
         </View>
 
@@ -171,7 +160,7 @@ export default function VoiceCallScreen() {
 
           {peerLiked && (
             <View style={styles.likedBadge}>
-              <Ionicons name="heart" size={16} color="#FF4D67" />
+              <Ionicons name="heart" size={16} color="#F08A80" />
               <Text style={styles.likedBadgeText}>Seni Beğendi!</Text>
             </View>
           )}
@@ -233,7 +222,7 @@ export default function VoiceCallScreen() {
             <Ionicons
               name={hasLiked ? "heart" : "heart-outline"}
               size={24}
-              color={hasLiked ? "#FF4D67" : "#FFFFFF"}
+              color={hasLiked ? "#F08A80" : "#FFFFFF"}
             />
             <Text style={styles.toolBtnText}>
               {hasLiked ? "Beğenildi" : "Beğen"}
@@ -355,7 +344,7 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#AA423C",
     justifyContent: "center",
     alignItems: "center",
     elevation: 4,
@@ -375,7 +364,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.one,
   },
   likedBadgeText: {
-    color: "#FF4D67",
+    color: "#F08A80",
     fontSize: 13,
     fontWeight: "bold",
     fontFamily: Fonts.bodyMedium,

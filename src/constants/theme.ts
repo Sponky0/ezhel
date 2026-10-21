@@ -7,39 +7,34 @@ import "@/global.css";
 
 import { Platform } from "react-native";
 
+// Napan: ink surfaces, warm coral actions, restrained lavender detail.
+// Action fills and text accents are separate so white button text stays legible.
 export const Colors = {
   light: {
-    text: "#0F172A",
-    background: "#F8FAFC",
-    backgroundElement: "#E2E8F0",
-    backgroundSelected: "#CBD5E1",
-    textSecondary: "#64748B",
-    primary: "#111111",
-    vip: "#D97706",
-    online: "#10B981",
-    border: "#E2E8F0",
+    text: '#202B3C', background: '#FAF7F3', backgroundElement: '#FFFFFF',
+    backgroundSelected: '#EFE7E0', textSecondary: '#616A78', primary: '#AC433D',
+    action: '#AC433D', onPrimary: '#FFFFFF', primarySoft: '#FBE8E4', accent: '#71629B',
+    vip: '#8E692C', online: '#27775E', border: '#E5DED7', danger: '#B63C46',
   },
   dark: {
-    text: "#FFFFFF",
-    background: "#0C1014",
-    backgroundElement: "#121620",
-    backgroundSelected: "#25292E",
-    textSecondary: "#A8A8A8",
-    primary: "#fdbd19",
-    vip: "#F59E0B",
-    online: "#45BD62",
-    border: "#1C212E",
+    text: '#F5F1EC', background: '#0D1728', backgroundElement: '#172237',
+    backgroundSelected: '#23304A', textSecondary: '#AEB6C5', primary: '#F08A80',
+    action: '#AA423C', onPrimary: '#FFFFFF', primarySoft: '#35262E', accent: '#BCADDC',
+    vip: '#D5B075', online: '#86C4AE', border: '#2A3549', danger: '#F28B94',
   },
 } as const;
+
+export const Shape = { control: 14, card: 20, sheet: 26, pill: 999 } as const;
+export const Type = { title: 28, section: 20, body: 15, caption: 12 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
   ios: {
-    /** Poppins SemiBold – for headings / titles */
-    heading: "Poppins_600SemiBold",
-    /** Poppins ExtraBold – for main headers */
-    headingBlack: "Poppins_800ExtraBold",
+    /** Inter Medium – for headings / titles */
+    heading: "Inter_500Medium",
+    /** Inter Medium – for main headers */
+    headingBlack: "Inter_500Medium",
     /** Inter Regular – for body text & chat messages */
     body: "Inter_400Regular",
     /** Inter Medium – for emphasized UI text */
@@ -50,18 +45,18 @@ export const Fonts = Platform.select({
     mono: "ui-monospace",
   },
   default: {
-    heading: "Poppins_600SemiBold",
-    headingBlack: "Poppins_800ExtraBold",
+    heading: "Inter_500Medium",
+    headingBlack: "Inter_500Medium",
     body: "Inter_400Regular",
     bodyMedium: "Inter_500Medium",
     serif: "serif",
     mono: "monospace",
   },
   web: {
-    heading: "'Poppins', var(--font-display), sans-serif",
-    headingBlack: "'Poppins', var(--font-display), sans-serif",
-    body: "'Inter', var(--font-display), sans-serif",
-    bodyMedium: "'Inter', var(--font-display), sans-serif",
+    heading: "Inter_500Medium",
+    headingBlack: "Inter_500Medium",
+    body: "Inter_400Regular",
+    bodyMedium: "Inter_500Medium",
     serif: "var(--font-serif)",
     mono: "var(--font-mono)",
   },
